@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0882EE9AAD1815D53061CCDE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B17619A53D78C60CBEDDF17 /* AppDelegate.swift */; };
+		0C71FC6999C647DE8854D6C9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 648D41A067A34047B2CD24B3 /* Assets.xcassets */; };
 		124E41D9ABAC7BBADEDE0A50 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEA3BFFABB2915C97979E583 /* Foundation.framework */; };
 		22A05C65DBFE3332C4F97F63 /* KeyboardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E9C405C2A9F0CF1B3961AA /* KeyboardLayout.swift */; };
 		2CDC9A380B8990E22ED48C6B /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEA3BFFABB2915C97979E583 /* Foundation.framework */; };
@@ -60,6 +61,7 @@
 		23018F244F02631D0297641F /* Completions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Completions.swift; sourceTree = "<group>"; };
 		2AA3D9F4716B12774721E86E /* Keyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Keyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B17619A53D78C60CBEDDF17 /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		648D41A067A34047B2CD24B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		66B3B494781BA09825586914 /* MBoard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MBoard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92EEE2A9D3856B50E2F10BF2 /* EmojiPicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EmojiPicker.swift; sourceTree = "<group>"; };
 		B4983AF7AD0CBE901BF268D8 /* TypingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TypingTests.swift; sourceTree = "<group>"; };
@@ -155,6 +157,7 @@
 			isa = PBXGroup;
 			children = (
 				4B17619A53D78C60CBEDDF17 /* AppDelegate.swift */,
+				648D41A067A34047B2CD24B3 /* Assets.xcassets */,
 				BB98C4C5AC5F9406C21D06D1 /* Info.plist */,
 			);
 			name = App;
@@ -285,6 +288,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0C71FC6999C647DE8854D6C9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,7 +441,7 @@
 		95EECD86D204700696B21BFC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -527,7 +531,7 @@
 		B89ECA524E2E8357E911F6E1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

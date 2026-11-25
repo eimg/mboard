@@ -62,6 +62,8 @@ System appearance should use the appearance information available to the extensi
 
 Both palettes must cover keyboard background, normal keys, modifiers, labels, suggestion bar, selected/pressed states, long-press menus, and readable contrast. Keep geometry stable when appearance changes.
 
+The containing app follows iOS system appearance independently of the keyboard's override.
+
 ## 4. Burmese input requirements and risks
 
 Keep these responsibilities separate:
@@ -188,7 +190,8 @@ The earlier discussion gave only a rough planning impression: weeks for a narrow
 
 Open `MBoard.xcodeproj`, select the MBoard scheme, and run on an iPhone simulator. Enable MBoard in Settings → General → Keyboard → Keyboards → Add New Keyboard. Focus the practice field in the app and select MBoard from the system globe. If the simulator uses a hardware keyboard, enable the software keyboard in Device Hub. Run core regression tests with `swift test`. The MBoard scheme also includes a UI typing and emoji search test that expects MBoard to be selected.
 
-- The containing app provides setup and a native practice text view. The extension targets iPhone on iOS 16 and later. Portrait is the reference geometry. The minimum version and English interaction details are prototype choices.
+- The containing app has a Home Screen icon, Myanmar setup instructions, and a native practice text view. Myanmar instructions use additional line spacing and retain the original iOS Settings labels. The English **Done** button appears while the practice field is active and dismisses the keyboard while keeping the practice text. The **Settings ဖွင့်ရန်** row below the setup instructions uses the public iOS app settings URL. The instructions show the full path to enable the keyboard.
+- The extension targets iPhone on iOS 16 and later. Portrait is the reference geometry. The minimum version and English interaction details are prototype choices.
 - Burmese base, Shift, default long presses, and two symbol pages use the emulator captures. English uses staggered QWERTY, digit hints, and sampled long presses. Some sliding alternates, the dedicated numeric keypad, automatic capitalization, and caps lock remain open.
 - Burmese composition uses marked text and the captured prebase-vowel, medial, kinzi, and stack sequences. The engine keeps Gboard's intermediate U+200C for a pending prebase vowel. Leaving it unfinished can commit the placeholder. Owned segments support scalar backspace. Outside a segment, a host deletion that can be identified precisely as a whole Burmese cluster has its preceding scalars restored. Actual host deletion granularity still needs per-app testing.
 - The toolbar switches languages and offers System, Light, and Dark. Choices persist in the extension's own defaults without requiring a shared container. System follows the input field's explicit appearance or the current interface traits. The keyboard and emoji picker use UIKit materials, semantic iOS colors, system fonts, and SF Symbols.

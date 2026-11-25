@@ -7,7 +7,11 @@ final class TypingTests: XCTestCase {
         app.launch()
         let field = app.textViews["practice"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.label, "စာရိုက်စမ်းရန်")
+        let done = app.navigationBars.buttons["doneTyping"]
+        XCTAssertFalse(done.exists)
         field.tap()
+        XCTAssertTrue(done.waitForExistence(timeout: 3))
 
         // Enable MBoard in simulator Settings and select it from the globe before the run.
         let englishSwitch = app.buttons["Switch to English"]
@@ -60,5 +64,11 @@ final class TypingTests: XCTestCase {
         XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertEqual(field.value as? String, mixedText)
+
+        done.tap()
+        XCTAssertFalse(done.exists)
+        XCTAssertFalse(cKey.isHittable)
+        XCTAssertEqual(field.value as? String, mixedText)
+        XCTAssertTrue(app.cells["openSettings"].isHittable)
     }
 }

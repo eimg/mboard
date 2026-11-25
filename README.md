@@ -6,7 +6,9 @@ MBoard is an English and Myanmar keyboard for iPhone. Switch languages from the 
 
 1. Once MBoard is installed, open **Settings → General → Keyboard → Keyboards → Add New Keyboard**.
 2. Choose **MBoard**.
-3. In a text field, touch and hold the globe 🌐 and choose **MBoard**. The MBoard app has a practice field where you can try it.
+3. In a text field, touch and hold the globe 🌐 and choose **MBoard**.
+
+Open the MBoard app to practice typing and read the Myanmar setup instructions. Tap **Done** to hide the keyboard or **Settings ဖွင့်ရန်** in the setup section to open iOS Settings.
 
 ## Use the keyboard
 
