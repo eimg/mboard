@@ -16,30 +16,25 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene)
         let navigation = UINavigationController(rootViewController: SetupController(style: .insetGrouped))
-        navigation.navigationBar.prefersLargeTitles = true
         window.rootViewController = navigation
         window.makeKeyAndVisible()
         self.window = window
     }
 }
 
-final class SetupController: UITableViewController, UITextViewDelegate {
+final class SetupController: UITableViewController, UITextViewDelegate, UIGestureRecognizerDelegate {
     private let editor = UITextView()
     private let placeholder = UILabel()
     private lazy var practiceCell = makePracticeCell()
-    private lazy var doneButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(endTyping))
-        button.accessibilityIdentifier = "doneTyping"
-        return button
-    }()
     private let instructions = [
         "Settings ထဲက General → Keyboard → Keyboards → Add New Keyboard ကို သွားပြီး MBoard ကို ရွေးပါ။",
-        "🌐 ကို ဖိထားပြီး MBoard ကို ရွေးပါ။ English နဲ့ မြန်မာ ပြောင်းဖို့ keyboard အပေါ်ဘက်က language button ကို နှိပ်ပါ။"
+        "🌐 ကို ဖိထားပြီး MBoard ကို ရွေးပါ။ English နဲ့ မြန်မာ ပြောင်းဖို့ Keyboard အပေါ်ဘက်က Language Button ကို နှိပ်ပါ။"
     ]
 
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "MBoard"
+        navigationItem.titleView = makeTitleView()
         editor.accessibilityLabel = "စာရိုက်စမ်းရန်"
         editor.accessibilityIdentifier = "practice"
         editor.font = .preferredFont(forTextStyle: .title3)
@@ -55,42 +50,71 @@ final class SetupController: UITableViewController, UITextViewDelegate {
         placeholder.textColor = .placeholderText
         placeholder.numberOfLines = 0
         placeholder.isAccessibilityElement = false
-        tableView.keyboardDismissMode = .interactive
+        tableView.alwaysBounceVertical = true
+        tableView.keyboardDismissMode = .onDrag
+        let dismissTap = UITapGestureRecognizer(target: self, action: #selector(endTyping))
+        dismissTap.cancelsTouchesInView = false
+        dismissTap.delegate = self
+        tableView.addGestureRecognizer(dismissTap)
+    }
+
+    private func makeTitleView() -> UIView {
+        let icon = UIImageView(image: UIImage(named: "PracticeIcon"))
+        icon.contentMode = .scaleAspectFit
+        icon.clipsToBounds = true
+        icon.layer.cornerRadius = 8
+        icon.layer.cornerCurve = .continuous
+        icon.isAccessibilityElement = false
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 36),
+            icon.heightAnchor.constraint(equalTo: icon.widthAnchor)
+        ])
+
+        let name = UILabel()
+        name.text = title
+        name.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 19, weight: .semibold))
+        name.adjustsFontForContentSizeCategory = true
+        name.textColor = .label
+        name.accessibilityTraits.insert(.header)
+
+        let stack = UIStackView(arrangedSubviews: [icon, name])
+        stack.alignment = .center
+        stack.spacing = 8
+        stack.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(endTyping)))
+        return stack
     }
 
     @objc private func endTyping() { view.endEditing(true) }
 
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        editor.isFirstResponder && !editor.bounds.contains(touch.location(in: editor))
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        editor.isFirstResponder ? editor.resignFirstResponder() : super.accessibilityPerformEscape()
+    }
+
     func textViewDidBeginEditing(_ textView: UITextView) {
         placeholder.isHidden = true
-        navigationItem.rightBarButtonItem = doneButton
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
         placeholder.isHidden = !textView.text.isEmpty
-        navigationItem.rightBarButtonItem = nil
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int { 2 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         section == 0 ? 1 : instructions.count + 1
     }
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 0 ? "စာရိုက်စမ်းရန်" : "Keyboard ထည့်ရန်"
-    }
-
-    override func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-        guard section == 1 else { return nil }
-        let footer = UITableViewHeaderFooterView(reuseIdentifier: nil)
-        var content = footer.defaultContentConfiguration()
-        content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16)
-        content.textProperties.font = .preferredFont(forTextStyle: .footnote)
-        content.textProperties.color = .secondaryLabel
-        setInstruction(
-            "appearance button နဲ့ System၊ Light သို့မဟုတ် Dark ကို ရွေးပါ။ Full Access ပိတ်ထားလည်း offline သုံးနိုင်ပါတယ်။",
-            in: &content
-        )
-        footer.contentConfiguration = content
-        return footer
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
+        var content = UIListContentConfiguration.groupedHeader()
+        content.text = section == 0 ? "စာရိုက်စမ်းရန်" : "Keyboard ထည့်ရန်"
+        content.textProperties.font = .preferredFont(forTextStyle: .subheadline)
+        content.textProperties.transform = .none
+        header.contentConfiguration = content
+        header.accessibilityTraits.insert(.header)
+        return header
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {

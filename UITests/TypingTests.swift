@@ -8,10 +8,7 @@ final class TypingTests: XCTestCase {
         let field = app.textViews["practice"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         XCTAssertEqual(field.label, "စာရိုက်စမ်းရန်")
-        let done = app.navigationBars.buttons["doneTyping"]
-        XCTAssertFalse(done.exists)
         field.tap()
-        XCTAssertTrue(done.waitForExistence(timeout: 3))
 
         // Enable MBoard in simulator Settings and select it from the globe before the run.
         let englishSwitch = app.buttons["Switch to English"]
@@ -65,10 +62,16 @@ final class TypingTests: XCTestCase {
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertEqual(field.value as? String, mixedText)
 
-        done.tap()
-        XCTAssertFalse(done.exists)
+        app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertFalse(cKey.isHittable)
         XCTAssertEqual(field.value as? String, mixedText)
         XCTAssertTrue(app.cells["openSettings"].isHittable)
+
+        field.tap()
+        XCTAssertTrue(cKey.waitForExistence(timeout: 3))
+        let start = field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 12, dy: -10))
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 130)))
+        XCTAssertFalse(cKey.isHittable)
+        XCTAssertEqual(field.value as? String, mixedText)
     }
 }

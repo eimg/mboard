@@ -3,7 +3,7 @@
 English / Burmese keyboard for iOS — product specification and discussion handoff.
 
 Last updated: 2026-11-25 (Asia/Yangon).
-Status: native iOS keyboard prototype implemented. The main typing and emoji flows were exercised on the iPhone simulator. Physical iPhone trials and responsiveness benchmarks are pending.
+Status: native iOS keyboard prototype implemented. The main typing and emoji flows were exercised on the iPhone simulator. Emoji picker layout and search were measured on the simulator. Physical iPhone trials are pending.
 Project folder: `/Users/eimg/Desktop/mboard`.
 
 ## 1. Purpose
@@ -19,6 +19,7 @@ The user considers Android Gboard particularly good for Burmese. It also support
 ### Languages and layout
 
 - Support English and Burmese within the product.
+- Capitalize the first letter of each English word in Burmese interface copy.
 - Use the familiar Gboard layout as the primary interaction/layout reference, especially for Burmese.
 - The user identified a layout called MyanSan and a font called Pyidaungsu as relevant references. They participated in the early initiative around these projects but later stepped away because of work/life constraints.
 - Preserve familiar character access. The [Android Gboard reference](references/gboard-burmese/README.md) records the user's emulator configuration, portrait layers, and observed typing and deletion examples.
@@ -63,6 +64,10 @@ System appearance should use the appearance information available to the extensi
 Both palettes must cover keyboard background, normal keys, modifiers, labels, suggestion bar, selected/pressed states, long-press menus, and readable contrast. Keep geometry stable when appearance changes.
 
 The containing app follows iOS system appearance independently of the keyboard's override.
+
+The Home Screen icon uses a double-arch mark that reads as both Latin m and Burmese က. The default artwork is white on blue. The dark icon appearance uses blue on charcoal and follows the iOS Home Screen icon setting.
+
+The practice screen pairs a small version of the icon with the MBoard title in the navigation bar. Its icon follows the app’s light or dark appearance. Both section titles use regular weight. The setup section ends with the Settings link.
 
 ## 4. Burmese input requirements and risks
 
@@ -190,16 +195,19 @@ The earlier discussion gave only a rough planning impression: weeks for a narrow
 
 Open `MBoard.xcodeproj`, select the MBoard scheme, and run on an iPhone simulator. Enable MBoard in Settings → General → Keyboard → Keyboards → Add New Keyboard. Focus the practice field in the app and select MBoard from the system globe. If the simulator uses a hardware keyboard, enable the software keyboard in Device Hub. Run core regression tests with `swift test`. The MBoard scheme also includes a UI typing and emoji search test that expects MBoard to be selected.
 
-- The containing app has a Home Screen icon, Myanmar setup instructions, and a native practice text view. Myanmar instructions use additional line spacing and retain the original iOS Settings labels. The English **Done** button appears while the practice field is active and dismisses the keyboard while keeping the practice text. The **Settings ဖွင့်ရန်** row below the setup instructions uses the public iOS app settings URL. The instructions show the full path to enable the keyboard.
+- The containing app has a Home Screen icon, Myanmar setup instructions, and a native practice text view. Myanmar instructions use additional line spacing and retain the original iOS Settings labels. Tapping outside the practice field or dragging the list dismisses the keyboard and preserves the practice text. VoiceOver users can also use the escape gesture. The **Settings ဖွင့်ရန်** row below the setup instructions uses the public iOS app settings URL. The instructions show the full path to enable the keyboard.
 - The extension targets iPhone on iOS 16 and later. Portrait is the reference geometry. The minimum version and English interaction details are prototype choices.
 - Burmese base, Shift, default long presses, and two symbol pages use the emulator captures. English uses staggered QWERTY, digit hints, and sampled long presses. Some sliding alternates, the dedicated numeric keypad, automatic capitalization, and caps lock remain open.
 - Burmese composition uses marked text and the captured prebase-vowel, medial, kinzi, and stack sequences. The engine keeps Gboard's intermediate U+200C for a pending prebase vowel. Leaving it unfinished can commit the placeholder. Owned segments support scalar backspace. Outside a segment, a host deletion that can be identified precisely as a whole Burmese cluster has its preceding scalars restored. Actual host deletion granularity still needs per-app testing.
 - The toolbar switches languages and offers System, Light, and Dark. Choices persist in the extension's own defaults without requiring a shared container. System follows the input field's explicit appearance or the current interface traits. The keyboard and emoji picker use UIKit materials, semantic iOS colors, system fonts, and SF Symbols.
 - Local prefix suggestions use small hand-entered English and Burmese word lists. Explicit selection appends the missing suffix, preserving text and spacing. Suggestions run separately from insertion. No automatic correction, learning, or network access is enabled.
 - The smiley opens one scrollable, eight-column emoji grid on an opaque surface with flat scroll edges. Session recents appear at the top when reopening the picker. Long-press an emoji for its skin-tone variants. Tapping search opens the full-size keyboard in the active language, and typing extends the results above the query. Search supports English names and Myanmar keywords offline. Selecting a result inserts the emoji. Back returns to the original scroll position and ABC returns to regular typing. The catalog includes 3,624 fully-qualified Unicode Emoji 14.0 sequences and search annotations from CLDR 47. GIFs and stickers remain deferred. [Unicode emoji data](https://unicode.org/Public/emoji/14.0/emoji-test.txt) · [CLDR Myanmar annotations](https://www.unicode.org/cldr/charts/47/summary/my.html) · [Unicode license](Keyboard/Resources/Unicode-LICENSE.txt)
+- The picker reuses fixed-size cells, builds its browse list and variation index once per extension process on a background task, and cancels obsolete searches as the query changes.
 - The Android emulator supplied reference data. iOS testing is simulator-only at the user's request.
 
 On the iPhone 17 Pro simulator, manual checks in the practice text view covered Burmese composition and suggestions, English suggestions, language switching, the three appearance options, and emoji search, insertion, recents, variants, backspace, and return to letters. The search-first picker and updated native styling were checked in light and dark appearances. Six core tests passed. Xcode's automated UI test runner had simulator connection errors, so the build and manual interaction checks provided separate evidence. Cross-app editing and physical-device performance remain pending.
+
+An optimized simulator harness scrolled the actual picker through all 1,849 browse entries, verified the last row, searched for `cat`, and returned to the saved scroll position. Up to 48 cells were visible in a 278-point panel. Across four runs, the 95th-percentile scroll layout cost was 0.38–0.44 ms per one-row step. Handling three search keystrokes took 0.46–1.22 ms on the main thread, down from 63–75 ms. These timings measure UIKit layout and key handling in the harness. End-to-end frame delivery and physical-device latency remain unmeasured.
 
 ## 12. Reference material
 

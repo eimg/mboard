@@ -1,10 +1,9 @@
 import UIKit
 
-struct EmojiItem: Equatable {
+struct EmojiItem: Equatable, Sendable {
     let glyph: String
     let name: String
     let keywords: String
-    let hasTone: Bool
     var base: String {
         let untoned = String(String.UnicodeScalarView(glyph.unicodeScalars.filter {
             !(0x1F3FB...0x1F3FF).contains($0.value) && $0.value != 0xFE0F
@@ -17,18 +16,79 @@ struct EmojiItem: Equatable {
         "🧑‍❤‍💋‍🧑": "💏", "🧑‍❤‍🧑": "💑"
     ]
 
-    static let catalog: [EmojiItem] = {
-        guard let url = Bundle.main.url(forResource: "Emoji", withExtension: "tsv"),
-              let source = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-        return source.split(separator: "\n").compactMap { line in
-            let fields = line.split(separator: "\t")
-            guard fields.count >= 3 else { return nil }
-            let glyph = String(fields[1])
-            return EmojiItem(glyph: glyph, name: String(fields[2]),
-                            keywords: fields.count == 4 ? String(fields[3]) : "",
-                            hasTone: glyph.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
+}
+
+private struct EmojiCatalog: Sendable {
+    static let shared = EmojiCatalog()
+    let items: [EmojiItem]
+    let browseItems: [EmojiItem]
+    private let groups: [String: [Int]]
+
+    private init() {
+        var items = [EmojiItem]()
+        var browseItems = [EmojiItem]()
+        var groups = [String: [Int]]()
+        if let url = Bundle.main.url(forResource: "Emoji", withExtension: "tsv"),
+           let data = try? Data(contentsOf: url) {
+            // TSV delimiters are single bytes even when the fields contain joined emoji.
+            for line in data.split(separator: 10) {
+                let fields = line.split(separator: 9)
+                guard fields.count >= 3 else { continue }
+                let glyph = String(decoding: fields[1], as: UTF8.self)
+                let item = EmojiItem(glyph: glyph, name: String(decoding: fields[2], as: UTF8.self),
+                                     keywords: fields.count == 4 ? String(decoding: fields[3], as: UTF8.self) : "")
+                groups[item.base, default: []].append(items.count)
+                items.append(item)
+                if !glyph.unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }) {
+                    browseItems.append(item)
+                }
+            }
         }
-    }()
+        self.items = items
+        self.browseItems = browseItems
+        self.groups = groups.filter { $0.value.count > 1 }
+    }
+
+    func browse(recent: [EmojiItem]) -> [EmojiItem] {
+        guard !recent.isEmpty else { return browseItems }
+        let recentGlyphs = Set(recent.map(\.glyph))
+        return recent + browseItems.filter { !recentGlyphs.contains($0.glyph) }
+    }
+
+    func variants(for item: EmojiItem) -> [EmojiItem] {
+        groups[item.base]?.map { items[$0] } ?? []
+    }
+
+    func matches(_ query: String) -> [EmojiItem] {
+        var exact = [EmojiItem]()
+        var partial = [EmojiItem]()
+        for item in items {
+            if Task.isCancelled { return [] }
+            if item.name == query { exact.append(item) }
+            else if item.name.localizedCaseInsensitiveContains(query) || item.keywords.contains(query) {
+                partial.append(item)
+            }
+        }
+        return exact + partial
+    }
+}
+
+private final class EmojiGrid: UICollectionView {
+    private let flow = UICollectionViewFlowLayout()
+
+    init() {
+        flow.minimumLineSpacing = 0
+        flow.minimumInteritemSpacing = 0
+        super.init(frame: .zero, collectionViewLayout: flow)
+    }
+
+    required init?(coder: NSCoder) { fatalError("Programmatic grid") }
+
+    override func layoutSubviews() {
+        let size = CGSize(width: max(1, floor(bounds.width / 8)), height: 40)
+        if flow.itemSize != size { flow.itemSize = size }
+        super.layoutSubviews()
+    }
 }
 
 private final class EmojiCell: UICollectionViewCell {
@@ -50,7 +110,7 @@ private final class EmojiCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError("Programmatic cell") }
 }
 
-final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDelegate {
     var onInsert: ((String) -> Void)?
     var onClose: (() -> Void)?
     var onDelete: (() -> Void)?
@@ -59,7 +119,8 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private(set) var isSearching = false
     var showsResults: Bool { isSearching && (!searchTerm.isEmpty || variants != nil) }
 
-    private var catalog = [EmojiItem]()
+    private var catalog: EmojiCatalog?
+    private var searchTask: Task<Void, Never>?
     private var allEmoji = [EmojiItem]()
     private var shown = [EmojiItem]()
     private var allEmojiOffset = CGPoint.zero
@@ -79,7 +140,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let queryButton = UIButton(type: .system)
     private let clearQuery = UIButton(type: .system)
     private let heading = UILabel()
-    private let grid = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
+    private let grid = EmojiGrid()
 
     init(recent: [EmojiItem]) {
         self.recent = recent
@@ -123,14 +184,18 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         stack.addArrangedSubview(grid)
         refresh()
         Task { [weak self] in
-            let items = await Task.detached(priority: .userInitiated) { EmojiItem.catalog }.value
+            let (catalog, browse) = await Task.detached(priority: .userInitiated) {
+                let catalog = EmojiCatalog.shared
+                return (catalog, catalog.browse(recent: recent))
+            }.value
             guard let self else { return }
-            catalog = items
-            let recentGlyphs = Set(self.recent.map(\.glyph))
-            allEmoji = self.recent + items.filter { !$0.hasTone && !recentGlyphs.contains($0.glyph) }
+            self.catalog = catalog
+            self.allEmoji = browse
             refresh()
         }
     }
+
+    deinit { searchTask?.cancel() }
 
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
 
@@ -231,15 +296,20 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
 
     private func refresh() {
         let search = searchTerm
-        if let variants {
-            shown = variants
-        } else if isSearching {
-            let matches = search.isEmpty ? [] : catalog.filter {
-                $0.name.localizedCaseInsensitiveContains(search) || $0.keywords.contains(search)
+        searchTask?.cancel()
+        let needsSearch = isSearching && variants == nil && !search.isEmpty
+        shown = variants ?? (isSearching ? [] : allEmoji)
+        if needsSearch, let catalog {
+            searchTask = Task.detached(priority: .userInitiated) { [weak self] in
+                let matches = catalog.matches(search)
+                await MainActor.run { [weak self] in
+                    guard !Task.isCancelled, let self else { return }
+                    self.shown = matches
+                    self.heading.text = matches.isEmpty ? "No results" : nil
+                    self.heading.isHidden = !matches.isEmpty
+                    self.grid.reloadData()
+                }
             }
-            shown = matches.filter { $0.name == search } + matches.filter { $0.name != search }
-        } else {
-            shown = allEmoji
         }
         let showingAllEmoji = !isSearching && variants == nil
         backButton.isHidden = showingAllEmoji
@@ -249,22 +319,17 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         queryButton.configuration?.baseForegroundColor = query.isEmpty ? .secondaryLabel : KeyColors.ink
         queryButton.accessibilityValue = query.isEmpty ? nil : query
         clearQuery.isHidden = query.isEmpty
-        if variants != nil {
-            heading.text = "Choose a variation"
-        } else {
-            heading.text = !search.isEmpty && shown.isEmpty ? "No results" : nil
-        }
+        heading.text = variants == nil ? nil : "Choose a variation"
         heading.isHidden = heading.text == nil
         grid.reloadData()
-        if showingAllEmoji { grid.layoutIfNeeded() }
+        if showingAllEmoji && allEmojiOffset != .zero { grid.layoutIfNeeded() }
         grid.setContentOffset(showingAllEmoji ? allEmojiOffset : .zero, animated: false)
         onSearchLayoutChange?()
     }
 
     @objc private func hold(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let path = grid.indexPathForItem(at: gesture.location(in: grid)) else { return }
-        let base = shown[path.item].base
-        let choices = catalog.filter { $0.base == base }
+        let choices = catalog?.variants(for: shown[path.item]) ?? []
         if choices.count > 1 {
             if !isSearching && variants == nil { allEmojiOffset = grid.contentOffset }
             variants = choices
@@ -293,12 +358,4 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
             refresh()
         }
     }
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
-                        sizeForItemAt indexPath: IndexPath) -> CGSize {
-        CGSize(width: floor(collectionView.bounds.width / 8), height: 40)
-    }
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
-                        minimumInteritemSpacingForSectionAt section: Int) -> CGFloat { 0 }
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
-                        minimumLineSpacingForSectionAt section: Int) -> CGFloat { 0 }
 }
