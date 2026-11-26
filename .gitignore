@@ -2,3 +2,8 @@
 DerivedData/
 xcuserdata/
 .DS_Store
+*.xcarchive/
+*.xcresult/
+*.ipa
+*.p12
+*.mobileprovision

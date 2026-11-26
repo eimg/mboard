@@ -4,7 +4,7 @@
 
 Read `PROJECT_SPEC.md` before planning or changing code. It preserves the product discussion that preceded this folder. The folder contains a native iOS prototype and Android Gboard reference captures. See the implementation status in the spec before changing behavior. Physical iPhone validation is pending.
 
-Read `/Users/eimg/AGENTS.md` for this computer's network/VPN and Fairway XMP instructions. Those instructions apply in addition to this file. Do not change optional PATH integrations. Fairway's PHP stack is not needed for this native iOS keyboard; do not start its services without a concrete task requirement.
+On the maintainer's Mac, read `~/AGENTS.md` for the local network/VPN and Fairway XMP instructions. Those instructions apply in addition to this file. Do not change optional PATH integrations. Fairway's PHP stack is not needed for this native iOS keyboard; do not start its services without a concrete task requirement.
 
 ## User and product context
 
