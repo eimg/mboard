@@ -44,6 +44,8 @@ private final class EnglishWordCompletions {
 
 final class KeyboardViewController: UIInputViewController {
     private let board = UIView()
+    private let contentTopInset: CGFloat = 7
+    private let background = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
     private let keyArea = UIStackView()
     private let toolbar = UIStackView()
     private let rows = UIStackView()
@@ -76,8 +78,10 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         board.translatesAutoresizingMaskIntoConstraints = false
+        board.layer.cornerCurve = .continuous
+        board.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        board.clipsToBounds = true
         view.addSubview(board)
-        let background = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
         background.contentView.backgroundColor = UIColor { traits in
             if traits.userInterfaceStyle == .dark {
                 return UIColor.black.withAlphaComponent(0.6)
@@ -93,7 +97,7 @@ final class KeyboardViewController: UIInputViewController {
         keyArea.spacing = 5
         keyArea.translatesAutoresizingMaskIntoConstraints = false
         board.addSubview(keyArea)
-        let top = keyArea.topAnchor.constraint(equalTo: board.topAnchor, constant: 3)
+        let top = keyArea.topAnchor.constraint(equalTo: board.topAnchor, constant: contentTopInset)
         keyAreaTop = top
         NSLayoutConstraint.activate([
             board.leadingAnchor.constraint(equalTo: view.leadingAnchor), board.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -106,7 +110,7 @@ final class KeyboardViewController: UIInputViewController {
             keyArea.bottomAnchor.constraint(equalTo: board.safeAreaLayoutGuide.bottomAnchor, constant: -4),
             toolbar.heightAnchor.constraint(equalToConstant: 33)
         ])
-        let size = view.heightAnchor.constraint(equalToConstant: 278)
+        let size = view.heightAnchor.constraint(equalToConstant: 275 + contentTopInset)
         size.priority = UILayoutPriority(999)
         size.isActive = true
         height = size
@@ -170,13 +174,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
-        let baseHeight: CGFloat = compact ? 202 : 278
+        let contentHeight: CGFloat = compact ? 199 : 275
         var panelHeight: CGFloat = 0
         if let emojiPicker, emojiPicker.isSearching {
             panelHeight = emojiPicker.showsResults ? (compact ? 92 : 140) : 42
         }
-        height?.constant = baseHeight + panelHeight
-        keyAreaTop?.constant = 3 + panelHeight
+        height?.constant = contentTopInset + contentHeight + panelHeight
+        keyAreaTop?.constant = contentTopInset + panelHeight
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -188,6 +192,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func configureAppearance() {
+        let usesSystemBackground = appearance == "System"
+        background.isHidden = usesSystemBackground
+        board.layer.cornerRadius = usesSystemBackground ? 0 : 12
+        emojiPicker?.usesSystemBackground = usesSystemBackground
         switch appearance {
         case "Dark": board.overrideUserInterfaceStyle = .dark
         case "Light": board.overrideUserInterfaceStyle = .light
@@ -443,7 +451,8 @@ final class KeyboardViewController: UIInputViewController {
         finishComposition()
         cancelGestures()
         guard emojiPicker == nil else { return }
-        let picker = EmojiPicker(recent: recentEmoji)
+        let picker = EmojiPicker(recent: recentEmoji, usesSystemBackground: appearance == "System",
+                                 topInset: contentTopInset)
         picker.onInsert = { [weak self] in self?.insertHostText($0) }
         picker.onDelete = { [weak self] in self?.deleteFromHost() }
         picker.onClose = { [weak self] in self?.closeEmoji() }
