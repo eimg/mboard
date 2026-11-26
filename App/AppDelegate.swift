@@ -65,7 +65,7 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
     }
 
     private func makeTitleView() -> UIView {
-        let icon = UIImageView(image: UIImage(named: "PracticeIcon"))
+        let icon = UIImageView(image: UIImage(named: "MBoardMark"))
         icon.contentMode = .scaleAspectFit
         icon.clipsToBounds = true
         icon.layer.cornerRadius = 8

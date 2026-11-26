@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B11000000000000000000001 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
+		B11000000000000000000000 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
 		B02000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B02000000000000000000000 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01000000000000000000000 /* PrivacyInfo.xcprivacy */; };
 		0882EE9AAD1815D53061CCDE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B17619A53D78C60CBEDDF17 /* AppDelegate.swift */; };
@@ -61,6 +63,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B10000000000000000000000 /* Brand.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Brand.xcassets; path = Shared/Brand.xcassets; sourceTree = "<group>"; };
 		B01000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B01000000000000000000000 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		08A5328D04C481CECD6BB9B9 /* Unicode-LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = "Unicode-LICENSE.txt"; sourceTree = "<group>"; };
@@ -140,6 +143,7 @@
 				C2DD3B0A528ED3E909E626DC /* Frameworks */,
 				888C47AE0BFB8717697084AC /* App */,
 				DC4742416426713D02A9D0B2 /* Keyboard */,
+				B10000000000000000000000 /* Brand.xcassets */,
 				78ACAB5494550BF50ED46ED6 /* Core */,
 				4CAA57321CC0555422C82F4C /* UITests */,
 			);
@@ -304,6 +308,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B02000000000000000000000 /* PrivacyInfo.xcprivacy in Resources */,
+				B11000000000000000000000 /* Brand.xcassets in Resources */,
 				0C71FC6999C647DE8854D6C9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -313,6 +318,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B02000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
+				B11000000000000000000001 /* Brand.xcassets in Resources */,
 				EBFDCE97CE25D0E50DB2062D /* Emoji.tsv in Resources */,
 				B6B1EBB99ACD445786DE6E9B /* BurmeseWords-LICENSE.txt in Resources */,
 				1D7BDDCC4EE94BFDBFCD8CBF /* BurmeseWords.txt in Resources */,
@@ -445,7 +451,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1;
@@ -464,7 +470,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -481,7 +487,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
@@ -554,7 +560,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -572,7 +578,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
@@ -590,7 +596,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1;

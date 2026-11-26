@@ -1,6 +1,6 @@
 # MBoard
 
-<img src="App/Assets.xcassets/PracticeIcon.imageset/Light.png" alt="MBoard icon" width="80" height="80">
+<img src="Shared/Brand.xcassets/MBoardMark.imageset/Light.png" alt="MBoard icon" width="80" height="80">
 
 MBoard is an offline English and Burmese (မြန်မာ) keyboard for iPhone and iPad. You can switch languages without leaving the keyboard, complete a Burmese word in the middle of an unspaced sentence, and search emoji in either language.
 
@@ -24,9 +24,9 @@ Open the MBoard app to practice typing and read the Myanmar setup instructions. 
 
 - Tap the language switch in the top-left corner to move between English and Myanmar.
 - Tap a suggestion to append its missing letters. English uses Apple’s on-device completions. Burmese uses a bundled word list and everyday phrases, including inside text written without spaces.
-- Suggestions you pick move up for future matches. Long-press a learned suggestion and choose **Forget This Suggestion** to reset its ranking. To reset both languages, open the gear menu and choose **Clear Learned Words → Clear for Both Languages**.
+- Suggestions you pick move up for future matches. Long-press a learned suggestion and choose **Forget This Suggestion** to reset its ranking. To reset both languages, tap the MBoard logo at the top right and choose **Clear Learned Words → Clear for Both Languages**.
 - Tap the smiley key to scroll through emoji. Tap the search field to type a query, or touch and hold an emoji to see its available skin tones.
-- Tap the gear in the top-right corner for **Auto-Capitalization**, **Word Suggestions**, and **System**, **Light**, or **Dark** appearance. Both typing switches start on. Auto-capitalization follows the active field when typing English.
+- Tap the MBoard logo in the top-right corner for **Auto-Capitalization**, **Word Suggestions**, and **System**, **Light**, or **Dark** appearance. Both typing switches start on. Auto-capitalization follows the active field when typing English.
 - Select text and tap Backspace once to delete the whole selection.
 
 Typing, suggestions, and emoji search work on your device with **Full Access** off. iOS uses its system keyboard in secure fields and in apps that require it.

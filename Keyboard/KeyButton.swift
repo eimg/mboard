@@ -76,46 +76,97 @@ final class KeyButton: UIButton {
     }
 }
 
-final class KeyPreview: UILabel {
+/// One keycap on touch-down, expanded into a grid of equally sized keycaps on hold.
+final class KeyPopup: UIView {
     private weak var source: KeyButton?
+    private var options: [String] = []
+    private var labels: [UILabel] = []
+    private var holdStart: CGPoint?
+    private var defaultIndex = 0
+    private var selected = 0
+    private var columns = 1
+    private var cell = CGSize.zero
+
+    var isChoosingAlternate: Bool { holdStart != nil }
+    var selectedAlternate: String? { isChoosingAlternate ? options[selected] : nil }
 
     init() {
         super.init(frame: .zero)
-        isAccessibilityElement = false
         isUserInteractionEnabled = false
-        textAlignment = .center
-        textColor = KeyColors.ink
-        adjustsFontSizeToFitWidth = true
-        minimumScaleFactor = 0.6
+        accessibilityElementsHidden = true
+        backgroundColor = KeyColors.letter
         layer.cornerRadius = 9
         layer.cornerCurve = .continuous
         layer.shadowOpacity = 0.23
         layer.shadowRadius = 2
         layer.shadowOffset = CGSize(width: 0, height: 1)
-        clipsToBounds = false
     }
 
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
 
-    func show(for key: KeyButton, in board: UIView) {
-        guard let title = key.currentTitle else { return }
+    func show(_ values: [String], for key: KeyButton, in board: UIView,
+              defaultIndex: Int = 0, start: CGPoint? = nil) {
         let keyFrame = key.convert(key.bounds, to: board)
-        let width = min(board.bounds.width - 4, max(51, keyFrame.width + 14))
-        let height: CGFloat = min(48, keyFrame.height + 6)
-        let x = min(max(2, keyFrame.midX - width / 2), board.bounds.width - width - 2)
+        let availableWidth = board.bounds.width - 4
+        guard availableWidth > 0, values.indices.contains(defaultIndex) else { return }
+        source = key
+        options = values
+        holdStart = start
+        self.defaultIndex = defaultIndex
+        selected = defaultIndex
+        cell = CGSize(width: min(availableWidth, min(60, max(51, keyFrame.width + 14))),
+                      height: min(48, keyFrame.height + 6))
+        let preferredColumns = values.count > 4 ? (values.count + 1) / 2 : values.count
+        columns = min(preferredColumns, max(1, Int(availableWidth / cell.width)))
+        let rows = (values.count + columns - 1) / columns
+        let size = CGSize(width: CGFloat(columns) * cell.width, height: CGFloat(rows) * cell.height)
+        let alignedX = keyFrame.midX - (CGFloat(selected % columns) + 0.5) * cell.width
+        let x = min(max(2, alignedX), board.bounds.width - size.width - 2)
         layer.removeAllAnimations()
-        frame = CGRect(x: x, y: max(2, keyFrame.minY - height - 2), width: width, height: height)
-        text = title
-        font = KeyButton.labelFont(for: title, size: 31)
-        layer.backgroundColor = KeyColors.letter.resolvedColor(with: board.traitCollection).cgColor
+        frame = CGRect(origin: CGPoint(x: x, y: max(2, keyFrame.minY - size.height - 2)), size: size)
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+        for (index, value) in values.enumerated() {
+            if index == labels.count {
+                let label = UILabel()
+                label.textAlignment = .center
+                label.adjustsFontSizeToFitWidth = true
+                label.minimumScaleFactor = 0.6
+                label.textColor = KeyColors.ink
+                label.layer.cornerRadius = layer.cornerRadius
+                label.layer.cornerCurve = .continuous
+                label.clipsToBounds = true
+                addSubview(label)
+                labels.append(label)
+            }
+            let label = labels[index]
+            label.frame = CGRect(x: CGFloat(index % columns) * cell.width,
+                                 y: CGFloat(index / columns) * cell.height, width: cell.width, height: cell.height)
+            label.text = LetterKey.label(for: value)
+            label.font = KeyButton.labelFont(for: value, size: 31)
+            label.isHidden = false
+            label.backgroundColor = index == selected && values.count > 1 ? KeyColors.pressed : .clear
+        }
+        for label in labels.dropFirst(values.count) { label.isHidden = true }
         alpha = 1
         board.addSubview(self)
-        source = key
+    }
+
+    func track(_ point: CGPoint) {
+        guard let holdStart else { return }
+        let local = convert(point, from: superview)
+        let column = max(0, min(columns - 1, Int(floor(local.x / cell.width))))
+        let row = max(0, min((options.count - 1) / columns, Int(floor(local.y / cell.height))))
+        // Lifting in place chooses the default even if the popup was clamped at an edge.
+        let next = hypot(point.x - holdStart.x, point.y - holdStart.y) < 8
+            ? defaultIndex : min(options.count - 1, row * columns + column)
+        guard next != selected else { return }
+        labels[selected].backgroundColor = .clear
+        selected = next
+        labels[next].backgroundColor = KeyColors.pressed
     }
 
     func release(_ key: KeyButton) {
-        guard source === key else { return }
+        guard source === key, !isChoosingAlternate else { return }
         source = nil
         if UIAccessibility.isReduceMotionEnabled { dismiss(); return }
         UIView.animate(withDuration: 0.09, animations: { self.alpha = 0 }) { finished in
@@ -125,69 +176,8 @@ final class KeyPreview: UILabel {
 
     func dismiss() {
         source = nil
+        holdStart = nil
         layer.removeAllAnimations()
         removeFromSuperview()
     }
-}
-
-final class AlternateMenu: UIView {
-    private let options: [String]
-    private var labels: [UILabel] = []
-    private var selected: Int
-    private let start: CGPoint
-    private let columns: Int
-    private let cellWidth: CGFloat
-    private let defaultIndex: Int
-    var value: String { options[selected] }
-
-    init(key: KeyButton, letter: LetterKey, board: UIView, start: CGPoint) {
-        options = letter.alternatives
-        selected = letter.defaultIndex
-        defaultIndex = letter.defaultIndex
-        self.start = start
-        let keyFrame = key.convert(key.bounds, to: board)
-        let cell = min(48, max(34, keyFrame.width))
-        let lines = options.count > 4 ? 2 : 1
-        columns = (options.count + lines - 1) / lines
-        cellWidth = min(cell, (board.bounds.width - 12) / CGFloat(columns))
-        let width = cellWidth * CGFloat(columns) + 8
-        let height = CGFloat(lines) * 36 + 8
-        let x = min(max(2, keyFrame.midX - cellWidth * (CGFloat(selected % columns) + 0.5) - 4), board.bounds.width - width - 2)
-        super.init(frame: CGRect(x: x, y: max(0, keyFrame.minY - height), width: width, height: height))
-        isUserInteractionEnabled = false
-        backgroundColor = .secondarySystemGroupedBackground
-        layer.cornerRadius = 13
-        layer.cornerCurve = .continuous
-        layer.shadowOpacity = 0.22
-        layer.shadowRadius = 5
-        layer.shadowOffset = CGSize(width: 0, height: 2)
-        for (i, text) in options.enumerated() {
-            let label = UILabel(frame: CGRect(x: 4 + CGFloat(i % columns) * cellWidth, y: 4 + CGFloat(i / columns) * 36, width: cellWidth, height: 36))
-            label.text = LetterKey.label(for: text)
-            label.textAlignment = .center
-            label.font = KeyButton.labelFont(for: text, size: 20)
-            label.adjustsFontSizeToFitWidth = true
-            label.minimumScaleFactor = 0.5
-            label.layer.cornerRadius = 9
-            label.clipsToBounds = true
-            addSubview(label)
-            labels.append(label)
-        }
-        paint()
-    }
-    func track(_ point: CGPoint) {
-        // Lifting in place always chooses the captured default, including at screen edges.
-        let local = CGPoint(x: point.x - frame.minX - 4, y: point.y - frame.minY - 4)
-        let col = max(0, min(columns - 1, Int(floor(local.x / cellWidth))))
-        let row = min((options.count - 1) / columns, max(0, Int(floor(local.y / 36))))
-        selected = hypot(point.x - start.x, point.y - start.y) < 8 ? defaultIndex : min(options.count - 1, row * columns + col)
-        paint()
-    }
-    private func paint() {
-        for (i, label) in labels.enumerated() {
-            label.backgroundColor = i == selected ? .tertiarySystemFill : .clear
-            label.textColor = KeyColors.ink
-        }
-    }
-    required init?(coder: NSCoder) { fatalError("Programmatic view") }
 }

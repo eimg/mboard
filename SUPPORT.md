@@ -12,4 +12,4 @@ MBoard works with Full Access off. The system keyboard appears in password field
 
 ## Manage suggestions
 
-Long-press a learned suggestion and choose **Forget This Suggestion**, or open MBoard’s gear menu and choose **Clear Learned Words → Clear for Both Languages**. To hide the suggestion bar’s candidates, turn off **Word Suggestions**. [Privacy policy](PRIVACY.md)
+Long-press a learned suggestion and choose **Forget This Suggestion**, or tap the MBoard logo at the top right and choose **Clear Learned Words → Clear for Both Languages**. To hide the suggestion bar’s candidates, turn off **Word Suggestions**. [Privacy policy](PRIVACY.md)

@@ -12,7 +12,7 @@ MBoard processes typing, suggestions, and emoji searches on the device. The keyb
 
 ## Manage learned choices
 
-Hold a learned suggestion and select **Forget This Suggestion** to remove its personal ranking boost. To remove all learned choices, open the gear menu and select **Clear Learned Words → Clear for Both Languages**. A word in the bundled dictionary or Apple’s English completions can still appear after clearing. **Word Suggestions** controls whether the keyboard shows candidates.
+Hold a learned suggestion and select **Forget This Suggestion** to remove its personal ranking boost. To remove all learned choices, tap the MBoard logo at the top right and select **Clear Learned Words → Clear for Both Languages**. A word in the bundled dictionary or Apple’s English completions can still appear after clearing. **Word Suggestions** controls whether the keyboard shows candidates.
 
 The app where you type receives the text you insert and handles that text under its own privacy practices.
 

@@ -66,8 +66,7 @@ final class KeyboardViewController: UIInputViewController {
     private var letterKeys = [ObjectIdentifier: LetterKey]()
     private var emojiPicker: EmojiPicker?
     private var recentEmoji = [EmojiItem]()
-    private let keyPreview = KeyPreview()
-    private var popup: AlternateMenu?
+    private let keyPopup = KeyPopup()
     private var repeatingDelete: Timer?
     private var lookup: Task<Void, Never>?
     private lazy var englishCompletions = EnglishWordCompletions()
@@ -135,10 +134,21 @@ final class KeyboardViewController: UIInputViewController {
         }
         languageButton.configuration = switchConfiguration
         languageButton.addAction(UIAction { [weak self] _ in self?.switchLanguage() }, for: .touchUpInside)
-        settingsButton.setImage(UIImage(systemName: "gearshape"), for: .normal)
-        settingsButton.accessibilityLabel = "Keyboard Settings"
+        let mark = UIImageView(image: UIImage(named: "MBoardMark"))
+        mark.translatesAutoresizingMaskIntoConstraints = false
+        mark.layer.cornerRadius = 6
+        mark.layer.cornerCurve = .continuous
+        mark.clipsToBounds = true
+        mark.isAccessibilityElement = false
+        settingsButton.addSubview(mark)
+        NSLayoutConstraint.activate([
+            mark.centerXAnchor.constraint(equalTo: settingsButton.centerXAnchor),
+            mark.centerYAnchor.constraint(equalTo: settingsButton.centerYAnchor),
+            mark.widthAnchor.constraint(equalToConstant: 24),
+            mark.heightAnchor.constraint(equalTo: mark.widthAnchor)
+        ])
+        settingsButton.accessibilityLabel = "MBoard Keyboard Settings"
         languageButton.tintColor = KeyColors.ink
-        settingsButton.tintColor = KeyColors.ink
         settingsButton.showsMenuAsPrimaryAction = true
         primaryLanguage = language.rawValue
         configureAppearance()
@@ -262,11 +272,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func cancelGestures() {
-        keyPreview.dismiss()
+        keyPopup.dismiss()
         repeatingDelete?.invalidate()
         repeatingDelete = nil
-        popup?.removeFromSuperview()
-        popup = nil
     }
 
     private func command(_ title: String, symbol: String? = nil, action: @escaping () -> Void) -> KeyButton {
@@ -294,12 +302,12 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func showPreview(_ key: KeyButton) {
-        guard popup == nil else { return }
-        keyPreview.show(for: key, in: board)
+        guard !keyPopup.isChoosingAlternate, let title = key.currentTitle else { return }
+        keyPopup.show([title], for: key, in: board)
     }
 
     @objc private func releasePreview(_ key: KeyButton) {
-        keyPreview.release(key)
+        keyPopup.release(key)
     }
 
     @objc private func holdLetter(_ gesture: UILongPressGestureRecognizer) {
@@ -308,13 +316,11 @@ final class KeyboardViewController: UIInputViewController {
         switch gesture.state {
         case .began:
             cancelGestures()
-            let menu = AlternateMenu(key: key, letter: letter, board: board, start: point)
-            board.addSubview(menu)
-            popup = menu
-        case .changed: popup?.track(point)
+            keyPopup.show(letter.alternatives, for: key, in: board, defaultIndex: letter.defaultIndex, start: point)
+        case .changed: keyPopup.track(point)
         case .ended:
-            popup?.track(point)
-            let value = popup?.value
+            keyPopup.track(point)
+            let value = keyPopup.selectedAlternate
             cancelGestures()
             if let value { insert(value) }
         case .cancelled, .failed: cancelGestures()
