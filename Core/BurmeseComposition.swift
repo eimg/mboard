@@ -1,12 +1,17 @@
 import Foundation
 
-/// Only the current marked segment belongs to the keyboard. The caller commits
-/// it at syllable boundaries and discards ownership on external edits.
+/// Only the current segment belongs to the keyboard. The caller discards
+/// ownership at syllable boundaries and on external edits.
 struct BurmeseComposition {
     private(set) var text = ""
     private var vowelAwaitingBase = false
 
     var isEmpty: Bool { text.isEmpty }
+
+    static func edit(from previous: String, to next: String) -> (remove: String, insert: String) {
+        let common = zip(previous.unicodeScalars, next.unicodeScalars).prefix(while: { $0 == $1 }).count
+        return (String(previous.unicodeScalars.dropFirst(common)), String(next.unicodeScalars.dropFirst(common)))
+    }
 
     static func canCompose(_ key: String) -> Bool {
         guard let first = key.unicodeScalars.first else { return false }
@@ -49,6 +54,23 @@ struct BurmeseComposition {
 }
 
 enum BurmeseDeletion {
+    static func removedSuffix(before: String, after: String) -> String? {
+        guard let last = before.last else { return nil }
+        let old = before.unicodeScalars, new = after.unicodeScalars
+        guard !old.elementsEqual(new) else { return nil }
+        let count = old.count - new.count
+        if count > 0, count <= last.unicodeScalars.count, old.dropLast(count).elementsEqual(new) {
+            return String(old.suffix(count))
+        }
+        // A bounded proxy window can reveal more preceding text after deletion.
+        // Accept only an unambiguous scalar or grapheme deletion at that boundary.
+        let candidates = Set([1, last.unicodeScalars.count]).filter { length in
+            let prefix = old.dropLast(length)
+            return !prefix.isEmpty && new.count > prefix.count && new.suffix(prefix.count).elementsEqual(prefix)
+        }
+        guard candidates.count == 1, let length = candidates.first else { return nil }
+        return String(old.suffix(length))
+    }
     /// Some hosts erase the full grapheme. Restore its leading scalars only
     /// when both context snapshots demonstrate that exact deletion.
     static func retainedScalars(before: String, afterHostDelete: String) -> String? {

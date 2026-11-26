@@ -23,3 +23,9 @@ The highlighted defaults were 3, à, and comma respectively. These three menus w
 | ![Emoji browsing](emoji.png) | ![People category](people.png) | ![Emoji search](emoji-search.png) |
 
 The picker opened on Smileys & Emotions. It showed an eight-column grid, search, a recent-items clock, and horizontal category navigation. Tapping People changed the grid. Tapping search opened the full keyboard in the active language, with English and Myanmar both observed. Typing `cat` extended the results above the query field while the keys stayed full size. ABC returned to letters. The lower bar also exposed delete and media controls. MBoard uses system emoji glyphs and a local Unicode catalog.
+
+## Typing settings observed on November 26, 2026
+
+The emulator ran Gboard 18.6.3.1002251336 with English (US) QWERTY and Burmese enabled. In **Corrections & suggestions**, **Auto-capitalization** was on and its description specified the first word of each sentence. **Suggestion strip** and **Word suggestions** were separate switches, both on. Auto-correction, spell check, grammar check, and next-word suggestions were also on. Contact suggestions were off.
+
+In **Preferences**, the regular number row was off. The dedicated emoji, comma, and period keys were on. The dedicated language-switch key was off. MBoard adopts the auto-capitalization and word-suggestion switches while retaining its existing language control.

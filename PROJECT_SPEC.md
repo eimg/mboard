@@ -2,9 +2,8 @@
 
 English / Burmese keyboard for iOS — product specification and discussion handoff.
 
-Last updated: 2026-11-25 (Asia/Yangon).
+Last updated: 2026-11-26 (Asia/Yangon).
 Status: native iOS keyboard prototype implemented. The main typing and emoji flows were exercised on the iPhone simulator. Emoji picker layout and search were measured on the simulator. Physical iPhone trials are pending.
-Project folder: `/Users/eimg/Desktop/mboard`.
 
 ## 1. Purpose
 
@@ -94,19 +93,13 @@ The keyboard inserts plain Unicode text into the host app. It cannot force the h
 
 ## 6. Initial suggestion engine
 
-Recommended starting approach:
+The suggestion bar displays up to three completions. Tapping one appends only the missing Unicode scalars. English matching supports straight and curly apostrophes and preserves the typed prefix. MBoard uses the available US English `UITextChecker` dictionary, falling back to another available English locale, and reserves a place for a matching everyday word when possible. If UIKit supplies no completions, the bundled English vocabulary still works.
 
-- English: prefix lookup plus limited spelling-neighbor candidates, ranked by useful frequency information when available.
-- Burmese: syllable-aware matching over recent input, with candidate word starts considered within a phrase. Do not assume a space-delimited English token model.
-- Preserve literal input for names, slang, code, unfamiliar words, and dictionary gaps.
-- Accepting a Burmese suggestion must not automatically add English-style word spacing.
-- Normalize lookup keys consistently while preserving correct output and avoiding unintended changes to text outside the replacement span.
-- Keep suggestion computation outside the immediate key-handling path. Discard stale results after input/context changes.
-- Keep language-specific suggestion behavior initially; automatic language detection and unified mixed-language ranking are later choices.
+Burmese lookup tries the longest plausible prefix first, including word starts inside continuous text. Hand-ranked conversational forms take priority over the word-break dictionary’s UTF-8 order. The extension bundles 41,120 entries from ICU 78.1 and searches the sorted list by prefix off the input thread. The resource retains the original entries and ships with the Unicode and Myanmar Karen Word Lists notices. [Upstream dictionary](https://github.com/unicode-org/icu/blob/release-78.1/icu4c/source/data/brkitr/dictionaries/burmesedict.txt) · [Bundled notices](Core/Resources/BurmeseWords-LICENSE.txt)
 
-Data sourcing is unresolved. Assess licences, spelling consistency, coverage, frequency/ranking quality, and bundled size before selecting English/Burmese word lists. Do not assume any public dictionary or Google's data is freely redistributable.
+Only explicit suggestion taps contribute to personal ranking. The extension stores up to 256 choices across both languages in its own defaults, recording the word, language, decayed selection weight and last selection date. Each tap adds one to the current weight. The weight halves every 30 days and stops boosting an entry below 0.25. Learned matches are considered before the three slots are filled. Long-pressing a learned suggestion offers **Forget This Suggestion**, which resets its personal boost. The keyboard settings menu offers **Clear Learned Words → Clear for Both Languages**. Ordinary dictionary entries remain available after either reset. Learning manually typed words and saving selected phrases remain open.
 
-Personal dictionaries and usage-based learning are possible later additions; retention, reset controls, and storage behavior have not been agreed.
+Lookup waits for a short typing pause. UIKit’s synchronous text checker runs on its required main actor, outside the insertion action, with a bounded in-memory cache for repeated English prefixes. Burmese indexing, candidate merging and history persistence run off the input thread. The keyboard drops results for stale text, language or selection.
 
 ## 7. iOS platform boundaries
 
@@ -156,9 +149,9 @@ Still open rather than implicitly approved or rejected:
 - Haptics, sound, key previews, and timing preferences.
 - The user selected Android Gboard as the English and emoji picker reference. Compare remaining behavior using the [English and emoji captures](references/gboard-english/README.md).
 - Automatic correction behavior and controls.
-- Personal dictionary and learned ranking.
+- Manually saved personal words and learning from literal typing.
 - iPad support, orientation scope, minimum iOS version, and initial target iPhone.
-- Larger licensed dictionaries and reusable composition rule sources.
+- Frequency-ranked Burmese corpora and reusable composition rule sources.
 - Personal installation, TestFlight, or eventual App Store release.
 
 ## 10. Validation and acceptance direction
@@ -197,15 +190,15 @@ Open `MBoard.xcodeproj`, select the MBoard scheme, and run on an iPhone simulato
 
 - The containing app has a Home Screen icon, Myanmar setup instructions, and a native practice text view. Myanmar instructions use additional line spacing and retain the original iOS Settings labels. Tapping outside the practice field or dragging the list dismisses the keyboard and preserves the practice text. VoiceOver users can also use the escape gesture. The **Settings ဖွင့်ရန်** row below the setup instructions uses the public iOS app settings URL. The instructions show the full path to enable the keyboard.
 - The extension targets iPhone on iOS 16 and later. Portrait is the reference geometry. The minimum version and English interaction details are prototype choices.
-- Burmese base, Shift, default long presses, and two symbol pages use the emulator captures. English uses staggered QWERTY, digit hints, and sampled long presses. Some sliding alternates, the dedicated numeric keypad, automatic capitalization, and caps lock remain open.
-- Burmese composition uses marked text and the captured prebase-vowel, medial, kinzi, and stack sequences. The engine keeps Gboard's intermediate U+200C for a pending prebase vowel. Leaving it unfinished can commit the placeholder. Owned segments support scalar backspace. Outside a segment, a host deletion that can be identified precisely as a whole Burmese cluster has its preceding scalars restored. Actual host deletion granularity still needs per-app testing.
-- The toolbar switches languages and offers System, Light, and Dark. Choices persist in the extension's own defaults without requiring a shared container. System follows the input field's explicit appearance or the current interface traits. The keyboard and emoji picker use UIKit materials, semantic iOS colors, system fonts, and SF Symbols.
-- Local prefix suggestions use small hand-entered English and Burmese word lists. Explicit selection appends the missing suffix, preserving text and spacing. Suggestions run separately from insertion. No automatic correction, learning, or network access is enabled.
+- Burmese base, Shift, default long presses, and two symbol pages use the emulator captures. English uses staggered QWERTY, digit hints, and sampled long presses. Some sliding alternates, the dedicated numeric keypad, and caps lock remain open.
+- Burmese composition tracks the current segment locally and inserts ordinary Unicode into the host. UIKit can hide a visible selection from the keyboard proxy while a marked range is active. Keeping the host text unmarked lets one native Backspace delete the selection. At a caret, Burmese Backspace removes a scalar when the host deletion can be verified. Reordering a prebase vowel edits the verified suffix of the current segment. Cursor, document or selection changes invalidate stale ownership. An unfinished prebase vowel can still contain Gboard’s intermediate U+200C. Host behavior needs further cross-app testing.
+- The toolbar switches languages and has a settings gear. **Auto-Capitalization** starts on and follows the host’s English capitalization mode, including sentence, word, and all-character fields. Manual Shift remains available. **Word Suggestions** starts on and controls the existing offline candidates in both languages. These choices follow the [emulator settings](references/gboard-english/README.md#typing-settings-observed-on-november-26-2026). The gear also offers System, Light, and Dark appearance. Preferences persist in the extension’s own defaults. System appearance follows the input field’s explicit appearance or the current interface traits.
+- The offline suggestion bar combines Apple-backed English completions, a bundled Burmese dictionary and conversational phrases, and locally learned selections (section 6). Accepting a suggestion preserves existing text and spacing.
 - The smiley opens one scrollable, eight-column emoji grid on an opaque surface with flat scroll edges. Session recents appear at the top when reopening the picker. Long-press an emoji for its skin-tone variants. Tapping search opens the full-size keyboard in the active language, and typing extends the results above the query. Search supports English names and Myanmar keywords offline. Selecting a result inserts the emoji. Back returns to the original scroll position and ABC returns to regular typing. The catalog includes 3,624 fully-qualified Unicode Emoji 14.0 sequences and search annotations from CLDR 47. GIFs and stickers remain deferred. [Unicode emoji data](https://unicode.org/Public/emoji/14.0/emoji-test.txt) · [CLDR Myanmar annotations](https://www.unicode.org/cldr/charts/47/summary/my.html) · [Unicode license](Keyboard/Resources/Unicode-LICENSE.txt)
 - The picker reuses fixed-size cells, builds its browse list and variation index once per extension process on a background task, and cancels obsolete searches as the query changes.
-- The Android emulator supplied reference data. iOS testing is simulator-only at the user's request.
+- The Android emulator supplied reference data. Version 0.1 (build 2), including the selection, typing settings and completion changes, was installed on an iPhone 15 Plus. Cross-app typing and performance checks on that device are pending.
 
-On the iPhone 17 Pro simulator, manual checks in the practice text view covered Burmese composition and suggestions, English suggestions, language switching, the three appearance options, and emoji search, insertion, recents, variants, backspace, and return to letters. The search-first picker and updated native styling were checked in light and dark appearances. Six core tests passed. Xcode's automated UI test runner had simulator connection errors, so the build and manual interaction checks provided separate evidence. Cross-app editing and physical-device performance remain pending.
+On the iPhone 17 Pro simulator, practice-field checks covered Burmese composition and suggestions, English suggestions, language switching, the three appearance options, and emoji search, insertion, recents, variants, backspace, and return to letters. The search-first picker and updated native styling were checked in light and dark appearances. On November 26, one Backspace removed the selected middle word in “Hi red go.” At the caret, Backspace changed “Hi ကျောင်း” to “Hi ကျောင်.” Select All followed by Backspace then cleared the field. Both typing switches were exercised. The updated completion engine passed all 12 core tests. On the simulator, English completions came from UIKit, an accepted Burmese completion preserved the preceding text, a learned choice retained its ranking after reinstall and relaunch, and forgetting or clearing restored default rankings. Xcode's automated UI test runner previously had simulator connection errors, so the build and direct simulator interactions provided separate evidence. Cross-app editing and physical-device performance remain pending.
 
 An optimized simulator harness scrolled the actual picker through all 1,849 browse entries, verified the last row, searched for `cat`, and returned to the saved scroll position. Up to 48 cells were visible in a 278-point panel. Across four runs, the 95th-percentile scroll layout cost was 0.38–0.44 ms per one-row step. Handling three search keystrokes took 0.46–1.22 ms on the main thread, down from 63–75 ms. These timings measure UIKit layout and key handling in the harness. End-to-end frame delivery and physical-device latency remain unmeasured.
 

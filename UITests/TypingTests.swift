@@ -1,6 +1,29 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    func testBackspaceDeletesASelectionAndPreservesItsNeighbors() {
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        for character in "hi red go" {
+            if character == " " { app.buttons["Space"].tap(); continue }
+            let lower = app.buttons["key." + String(character)]
+            (lower.exists ? lower : app.buttons["key." + character.uppercased()]).tap()
+        }
+        field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 54, dy: 24)).doubleTap()
+        app.buttons["Delete"].firstMatch.tap()
+        let remaining = (field.value as? String)?.lowercased().split(separator: " ")
+        XCTAssertEqual(remaining, ["hi", "go"])
+
+        app.buttons["Switch to Burmese"].tap()
+        app.buttons["key.က"].tap()
+        field.typeKey("a", modifierFlags: .command)
+        app.buttons["Delete"].firstMatch.tap()
+        XCTAssertTrue((field.value as? String ?? "").isEmpty)
+    }
+
     func testBurmeseAndEnglishInTextView() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

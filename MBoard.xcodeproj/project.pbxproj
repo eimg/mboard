@@ -14,12 +14,15 @@
 		2CDC9A380B8990E22ED48C6B /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEA3BFFABB2915C97979E583 /* Foundation.framework */; };
 		52966F44E0EEC36AAF510923 /* KeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FA6FA22C147B663FBCDFDD9 /* KeyButton.swift */; };
 		777F90BAD79D19F37AB68DC8 /* Completions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23018F244F02631D0297641F /* Completions.swift */; };
+		EA290979DFA6445BB39DB7FE /* LearnedWords.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD126C42AE14DAB89518A29 /* LearnedWords.swift */; };
 		86E2FE1668C5C9F1C1B8A440 /* Keyboard.appex in Embed Keyboard Extension */ = {isa = PBXBuildFile; fileRef = 2AA3D9F4716B12774721E86E /* Keyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		911DA214BCC4CDCB3E15B544 /* EmojiPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92EEE2A9D3856B50E2F10BF2 /* EmojiPicker.swift */; };
 		9A4DD56AF10C3DEFC6A8AA65 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEA3BFFABB2915C97979E583 /* Foundation.framework */; };
 		AC2D6892EA9DF137BDCD4E98 /* Unicode-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08A5328D04C481CECD6BB9B9 /* Unicode-LICENSE.txt */; };
 		D24B1F89DF7858278209C620 /* BurmeseComposition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03C7204A53E5071D4E7037F /* BurmeseComposition.swift */; };
 		EBFDCE97CE25D0E50DB2062D /* Emoji.tsv in Resources */ = {isa = PBXBuildFile; fileRef = D47BC6D89998AE43CC27CF91 /* Emoji.tsv */; };
+		B6B1EBB99ACD445786DE6E9B /* BurmeseWords-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3728CB7F4C444193BEBF3C99 /* BurmeseWords-LICENSE.txt */; };
+		1D7BDDCC4EE94BFDBFCD8CBF /* BurmeseWords.txt in Resources */ = {isa = PBXBuildFile; fileRef = B43471751BD84EC694A00C3B /* BurmeseWords.txt */; };
 		F6B5B666F51B537393B0DB4B /* TypingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4983AF7AD0CBE901BF268D8 /* TypingTests.swift */; };
 		F895B99EB29FF48250C15A88 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E0314A5653A3734FEFB564 /* KeyboardViewController.swift */; };
 /* End PBXBuildFile section */
@@ -59,6 +62,7 @@
 		08A5328D04C481CECD6BB9B9 /* Unicode-LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = "Unicode-LICENSE.txt"; sourceTree = "<group>"; };
 		1FA6FA22C147B663FBCDFDD9 /* KeyButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyButton.swift; sourceTree = "<group>"; };
 		23018F244F02631D0297641F /* Completions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Completions.swift; sourceTree = "<group>"; };
+		4AD126C42AE14DAB89518A29 /* LearnedWords.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LearnedWords.swift; sourceTree = "<group>"; };
 		2AA3D9F4716B12774721E86E /* Keyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Keyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B17619A53D78C60CBEDDF17 /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		648D41A067A34047B2CD24B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -71,6 +75,8 @@
 		C3D8E29B1218917DF918A5B7 /* MBoardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MBoardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0E0314A5653A3734FEFB564 /* KeyboardViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		D47BC6D89998AE43CC27CF91 /* Emoji.tsv */ = {isa = PBXFileReference; includeInIndex = 1; path = Emoji.tsv; sourceTree = "<group>"; };
+		3728CB7F4C444193BEBF3C99 /* BurmeseWords-LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = "../../Core/Resources/BurmeseWords-LICENSE.txt"; sourceTree = "<group>"; };
+		B43471751BD84EC694A00C3B /* BurmeseWords.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = ../../Core/Resources/BurmeseWords.txt; sourceTree = "<group>"; };
 		E03C7204A53E5071D4E7037F /* BurmeseComposition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BurmeseComposition.swift; sourceTree = "<group>"; };
 		E4E9C405C2A9F0CF1B3961AA /* KeyboardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeyboardLayout.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -107,6 +113,8 @@
 			isa = PBXGroup;
 			children = (
 				D47BC6D89998AE43CC27CF91 /* Emoji.tsv */,
+				3728CB7F4C444193BEBF3C99 /* BurmeseWords-LICENSE.txt */,
+				B43471751BD84EC694A00C3B /* BurmeseWords.txt */,
 				08A5328D04C481CECD6BB9B9 /* Unicode-LICENSE.txt */,
 			);
 			name = Resources;
@@ -147,6 +155,7 @@
 			children = (
 				E03C7204A53E5071D4E7037F /* BurmeseComposition.swift */,
 				23018F244F02631D0297641F /* Completions.swift */,
+				4AD126C42AE14DAB89518A29 /* LearnedWords.swift */,
 				E4E9C405C2A9F0CF1B3961AA /* KeyboardLayout.swift */,
 			);
 			name = Core;
@@ -297,6 +306,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				EBFDCE97CE25D0E50DB2062D /* Emoji.tsv in Resources */,
+				B6B1EBB99ACD445786DE6E9B /* BurmeseWords-LICENSE.txt in Resources */,
+				1D7BDDCC4EE94BFDBFCD8CBF /* BurmeseWords.txt in Resources */,
 				AC2D6892EA9DF137BDCD4E98 /* Unicode-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -335,6 +346,7 @@
 				F895B99EB29FF48250C15A88 /* KeyboardViewController.swift in Sources */,
 				D24B1F89DF7858278209C620 /* BurmeseComposition.swift in Sources */,
 				777F90BAD79D19F37AB68DC8 /* Completions.swift in Sources */,
+				EA290979DFA6445BB39DB7FE /* LearnedWords.swift in Sources */,
 				22A05C65DBFE3332C4F97F63 /* KeyboardLayout.swift in Sources */,
 				911DA214BCC4CDCB3E15B544 /* EmojiPicker.swift in Sources */,
 			);
@@ -425,7 +437,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1;
@@ -444,7 +456,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -461,7 +473,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
@@ -534,7 +546,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -552,7 +564,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
@@ -570,7 +582,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1;

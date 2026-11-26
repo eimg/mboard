@@ -37,6 +37,20 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(BurmeseDeletion.retainedScalars(before: "ကျိ", afterHostDelete: "unrelated"))
         XCTAssertNil(BurmeseDeletion.retainedScalars(before: "x👩🏽‍💻", afterHostDelete: "x"))
     }
+
+    func testInlineCompositionReplacesOnlyTheChangedScalars() {
+        let prebase = BurmeseComposition.edit(from: "\u{200C}ေ", to: "ကေ")
+        XCTAssertEqual(prebase.remove, "\u{200C}ေ")
+        XCTAssertEqual(prebase.insert, "ကေ")
+        let medial = BurmeseComposition.edit(from: "ကေ", to: "ကျေ")
+        XCTAssertEqual(medial.remove, "ေ")
+        XCTAssertEqual(medial.insert, "ျေ")
+        XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "xက"), "ေ")
+        XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "x"), "ကေ")
+        XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "wx"), "ကေ")
+        XCTAssertNil(BurmeseDeletion.removedSuffix(before: "xကေ", after: "xကေ"))
+        XCTAssertNil(BurmeseDeletion.removedSuffix(before: "xကေ", after: "other"))
+    }
     func testCompletionOnlyAppendsMissingScalars() {
         XCTAssertTrue(Completions.matches(before: "Hi He", language: .english).contains(Completion(title:"Hello",suffix:"llo")))
         XCTAssertTrue(Completions.matches(before: "သူကျော", language: .burmese).contains(Completion(title:"ကျောင်း",suffix:"င်း")))
@@ -50,6 +64,19 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(key.alternatives[key.defaultIndex], expected)
         }
         XCTAssertTrue(rows[0][2].alternatives.contains("é"))
+    }
+
+    func testEnglishCapitalizationUsesTheInsertionPointAndFieldMode() {
+        for before in ["", "  ", "Hello. ", "Really?  ", "Done!” ", "ဟုတ်ပါတယ်။ ", "Hello\n", "Hi. “"] {
+            XCTAssertTrue(EnglishCapitalization.sentences.shouldShift(before: before), before)
+        }
+        for before in ["a", "Hello ", "hello.", "3.14 ", "Say “", "example.com"] {
+            XCTAssertFalse(EnglishCapitalization.sentences.shouldShift(before: before), before)
+        }
+        XCTAssertTrue(EnglishCapitalization.words.shouldShift(before: "First "))
+        XCTAssertFalse(EnglishCapitalization.words.shouldShift(before: "Fir"))
+        XCTAssertTrue(EnglishCapitalization.allCharacters.shouldShift(before: "ab"))
+        XCTAssertFalse(EnglishCapitalization.none.shouldShift(before: ""))
     }
 
     func testReferenceLayout() {

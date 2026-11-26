@@ -5,6 +5,30 @@ enum Language: String {
     var title: String { self == .burmese ? "မြန်မာ" : "English" }
 }
 
+enum EnglishCapitalization {
+    case none, words, sentences, allCharacters
+
+    func shouldShift(before text: String) -> Bool {
+        switch self {
+        case .none: return false
+        case .allCharacters: return true
+        case .words: return text.last?.isWhitespace ?? true
+        case .sentences:
+            var context = text[...]
+            let quotes = "\"'“‘([{"
+            while let last = context.last, quotes.contains(last) { context.removeLast() }
+            guard let last = context.last else { return true }
+            guard last.isWhitespace else { return false }
+            while let space = context.last, space.isWhitespace {
+                if space.isNewline { return true }
+                context.removeLast()
+            }
+            while let closing = context.last, "\"'”’)]}".contains(closing) { context.removeLast() }
+            return context.last.map { ".!?။…".contains($0) } ?? true
+        }
+    }
+}
+
 struct LetterKey {
     let text: String
     let alternatives: [String]
