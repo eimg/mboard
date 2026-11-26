@@ -3,8 +3,8 @@ import Foundation
 /// Only the current segment belongs to the keyboard. The caller discards
 /// ownership at syllable boundaries and on external edits.
 struct BurmeseComposition {
+    private static let unboundE = "\u{200C}ေ"
     private(set) var text = ""
-    private var vowelAwaitingBase = false
 
     var isEmpty: Bool { text.isEmpty }
 
@@ -16,7 +16,9 @@ struct BurmeseComposition {
     func startsNewSegment(_ key: String) -> Bool {
         guard !text.isEmpty else { return false }
         if key == "ေ" { return true }
-        return key.unicodeScalars.first.map(Self.isBase) == true && !vowelAwaitingBase && text.unicodeScalars.last?.value != 0x1039
+        guard key.unicodeScalars.first.map(Self.isBase) == true else { return false }
+        return text != Self.unboundE && text.unicodeScalars.last != "္"
+            && !text.unicodeScalars.suffix(4).elementsEqual("င်္ေ".unicodeScalars)
     }
 
     private static func isBase(_ scalar: Unicode.Scalar) -> Bool {
@@ -25,8 +27,17 @@ struct BurmeseComposition {
 
     mutating func append(_ key: String) {
         if key == "ေ" {
-            text += "\u{200C}ေ"
-            vowelAwaitingBase = true
+            text += Self.unboundE
+            return
+        }
+        if key.unicodeScalars.count > 1, text == Self.unboundE, key.unicodeScalars.first.map(Self.isBase) == true {
+            text = key + "ေ"
+            return
+        }
+        // A multi-scalar shortcut at a pending stack is a literal key. Only
+        // tapping one base completes the prebase stack transformation.
+        if key.unicodeScalars.count > 1, pendingStackBase != nil {
+            text += key
             return
         }
         for scalar in key.unicodeScalars {
@@ -36,40 +47,80 @@ struct BurmeseComposition {
 
     private mutating func append(_ scalar: Unicode.Scalar) {
         let isBase = Self.isBase(scalar)
-        if vowelAwaitingBase && isBase && text == "\u{200C}ေ" {
-            text = String(scalar) + "ေ"
-            vowelAwaitingBase = false
+        if isBase && text == Self.unboundE {
+            text = (scalar == "ဥ" ? "ဉ" : String(scalar)) + "ေ"
             return
         }
-        // The subscript consonant belongs before a pretyped E vowel.
-        if isBase && text.unicodeScalars.suffix(2).elementsEqual("ေ္".unicodeScalars) {
-            text.unicodeScalars.removeLast(2)
-            text += "္" + String(scalar) + "ေ"
+        if isBase, text.unicodeScalars.suffix(4).elementsEqual("င်္ေ".unicodeScalars) {
+            replaceSuffix(1, with: String(scalar) + "ေ")
             return
         }
-
-        var position = text.unicodeScalars.endIndex
-        while position > text.unicodeScalars.startIndex {
-            let previous = text.unicodeScalars.index(before: position)
-            guard !vowelAwaitingBase, Self.movesBefore(scalar.value, text.unicodeScalars[previous].value) else { break }
-            position = previous
+        if scalar == "္", text.unicodeScalars.last == "ေ",
+           let base = text.unicodeScalars.dropLast().last, Self.isBase(base) {
+            replaceSuffix(2, with: "\u{200C}ေ" + String(base) + "္")
+            return
         }
-        text.unicodeScalars.insert(scalar, at: position)
+        if isBase, let base = pendingStackBase {
+            replaceSuffix(4, with: String(base) + "္" + String(scalar) + "ေ")
+            return
+        }
+        if text == "ဥ" {
+            if scalar == "ိ" || scalar == "ီ" { text = "ဦ"; return }
+            if "ျြွှဲါာ္်".unicodeScalars.contains(scalar) { text = "ဉ" }
+        }
+        // An unbound sequence has no syllable to reorder.
+        guard text.unicodeScalars.first.map(Self.isBase) == true else {
+            text.unicodeScalars.append(scalar)
+            return
+        }
+        let medial = (0x103B...0x103E).contains(scalar.value)
+        let closed = text.unicodeScalars.contains("ါ") || text.unicodeScalars.contains("ာ")
+            || text.range(of: "့်", options: .literal) != nil || text.range(of: "့့", options: .literal) != nil
+        let endsSpelling = ["့်", "့့"].contains { text.unicodeScalars.suffix(2).elementsEqual($0.unicodeScalars) }
+        if (closed && !medial) || endsSpelling {
+            text.unicodeScalars.append(scalar)
+        } else {
+            if let conflicts = Self.replacedMarks(for: scalar) {
+                var index = text.unicodeScalars.endIndex
+                while index > text.unicodeScalars.startIndex {
+                    let previous = text.unicodeScalars.index(before: index)
+                    let mark = text.unicodeScalars[previous]
+                    guard Self.editableMarks.contains(mark) else { break }
+                    if conflicts.contains(mark) { text.unicodeScalars.remove(at: previous) }
+                    index = previous
+                }
+            }
+            var position = text.unicodeScalars.endIndex
+            while position > text.unicodeScalars.startIndex {
+                let previous = text.unicodeScalars.index(before: position)
+                guard Self.movesBefore(scalar, text.unicodeScalars[previous]) else { break }
+                position = previous
+            }
+            text.unicodeScalars.insert(scalar, at: position)
+        }
 
         // These key sequences denote individual Myanmar letters in MyanSan.
         switch scalar.value {
-        case 0x103B:
-            if text.unicodeScalars.suffix(2).elementsEqual("စျ".unicodeScalars) {
-                replaceSuffix(2, with: "ဈ")
-            } else if text.unicodeScalars.suffix(3).elementsEqual("စျေ".unicodeScalars) {
-                replaceSuffix(3, with: "ဈေ")
+        case 0x103B, 0x103C:
+            let base: Unicode.Scalar = scalar == "ျ" ? "စ" : "သ"
+            if let index = text.unicodeScalars.lastIndex(of: scalar), index > text.unicodeScalars.startIndex {
+                let previous = text.unicodeScalars.index(before: index)
+                if text.unicodeScalars[previous] == base {
+                    let letter: Unicode.Scalar = scalar == "ျ" ? "ဈ" : "ဩ"
+                    text.unicodeScalars.replaceSubrange(previous...index, with: [letter])
+                }
             }
-        case 0x102E where text.unicodeScalars.suffix(2).elementsEqual("ဦ".unicodeScalars):
-            replaceSuffix(2, with: "ဦ")
-        case 0x103A where text.unicodeScalars.suffix(5).elementsEqual("သြော်".unicodeScalars):
-            replaceSuffix(5, with: "ဪ")
+        case 0x103A where text.unicodeScalars.suffix(4).elementsEqual("ဩော်".unicodeScalars):
+            replaceSuffix(4, with: "ဪ")
         default: break
         }
+    }
+
+    private var pendingStackBase: Unicode.Scalar? {
+        let tail = text.unicodeScalars.suffix(4)
+        guard tail.count == 4, tail.starts(with: "\u{200C}ေ".unicodeScalars),
+              tail.last == "္", let base = tail.dropLast().last, Self.isBase(base) else { return nil }
+        return base
     }
 
     private mutating func replaceSuffix(_ count: Int, with replacement: String) {
@@ -77,57 +128,38 @@ struct BurmeseComposition {
         text += replacement
     }
 
-    // Pairwise precedence keeps unrelated marks and repeated taps intact.
-    private static func movesBefore(_ incoming: UInt32, _ previous: UInt32) -> Bool {
-        switch previous {
-        case 0x1031: return (0x103B...0x103E).contains(incoming)
-        case 0x103D, 0x103E: return (0x103B..<previous).contains(incoming)
-        case 0x102F, 0x1030: return (0x102D...0x102E).contains(incoming)
-        case 0x1032: return (0x102D...0x1030).contains(incoming)
-        case 0x1036: return (0x102D...0x1030).contains(incoming) || incoming == 0x1032
-        case 0x1037: return (0x102B...0x1030).contains(incoming) || incoming == 0x1032 || incoming == 0x1036
-        case 0x1038, 0x103A: return incoming == 0x1037
-        default: return false
+    // Only the marks in the current editable run can replace one another.
+    private static let editableMarks = "ျြွှိီုူဲံ့ေ်".unicodeScalars
+
+    private static func replacedMarks(for incoming: Unicode.Scalar) -> String.UnicodeScalarView? {
+        switch incoming {
+        case "ျ", "ြ", "ွ", "ှ": return String(incoming).unicodeScalars
+        case "ိ", "ီ": return "ိီဲ်".unicodeScalars
+        case "ု", "ူ": return "ုူ".unicodeScalars
+        case "ဲ", "်": return "ိီဲံ်".unicodeScalars
+        case "ံ": return "ဲံ်".unicodeScalars
+        default: return nil
         }
     }
 
-    /// Keep only the suffix that a subsequent combining key can still change.
-    var stablePrefixLength: Int {
-        let scalars = text.unicodeScalars
-        if scalars.first?.value == 0x200C { return 0 }
-        // Prefixes of the three MyanSan letter substitutions and of a stack
-        // with a pretyped E need to remain available across key presses.
-        let unfinished = ["စ", "စေ", "ဥ", "သ", "သေ", "သြ", "သြေ", "သြော"]
-        if scalars.last?.value == 0x1031 || scalars.suffix(2).elementsEqual("ေ္".unicodeScalars) {
-            return 0
+    private static func movesBefore(_ incoming: Unicode.Scalar, _ previous: Unicode.Scalar) -> Bool {
+        switch incoming {
+        case "ျ": return "ြွှေိီုူဲံ့ါာ".unicodeScalars.contains(previous)
+        case "ြ": return "ွှေိီုူဲံ့ါာ".unicodeScalars.contains(previous)
+        case "ွ": return "ှေိီုူဲံ့ါာ".unicodeScalars.contains(previous)
+        case "ှ": return "ေိီုူဲံ့ါာ်".unicodeScalars.contains(previous)
+        case "ိ", "ီ": return "ုူံ့".unicodeScalars.contains(previous)
+        case "ု", "ူ": return "ဲံ့".unicodeScalars.contains(previous)
+        case "ဲ", "ံ": return previous == "့"
+        case "့": return previous == "်"
+        case "်": return "ျြွေုူ".unicodeScalars.contains(previous)
+        default: return false
         }
-        var stable = scalars.count
-        for pattern in unfinished {
-            let suffix = pattern.unicodeScalars
-            if scalars.suffix(suffix.count).elementsEqual(suffix) {
-                stable = min(stable, scalars.count - suffix.count)
-            }
-        }
-
-        // Find the earliest insertion point among the supported combining
-        // keys. The next syllable can never reach into this one.
-        let upperPresent = scalars.contains { (0x102D...0x102E).contains($0.value) }
-        for incoming: UInt32 in [0x102B, 0x102D, 0x102F, 0x1032, 0x1036, 0x1037, 0x103B, 0x103C, 0x103D, 0x103E] {
-            if incoming == 0x102D && upperPresent { continue }
-            var count = scalars.count
-            for previous in scalars.reversed() {
-                guard Self.movesBefore(incoming, previous.value) else { break }
-                count -= 1
-            }
-            stable = min(stable, count)
-        }
-        return stable
     }
 
     mutating func backspace() {
         guard !text.isEmpty else { return }
         text.unicodeScalars.removeLast()
-        vowelAwaitingBase = text == "\u{200C}ေ"
     }
 }
 
@@ -175,22 +207,22 @@ protocol BurmeseEditHost {
     func deleteBackward()
 }
 
-/// Commit the stable prefix as ordinary text. Only keys still subject to
-/// reordering belong to UIKit's marked range, even with a truncated context.
+/// Keep one active syllable. A native marked range protects input when the
+/// host hides or truncates the text needed to verify an ordinary replacement.
 @MainActor
 struct BurmeseHostEditor {
     private var pending = BurmeseComposition()
-    private var committed = ""
+    private var isMarked = false
     private var owner: HostContext?
     private var plainAnchor: String?
+    private var emptyBoundary = false
     private var markBoundary: String?
-    private var marked: String { String(pending.text.unicodeScalars.dropFirst(committed.unicodeScalars.count)) }
+    private var boundary: String? { markBoundary ?? (emptyBoundary ? "" : nil) }
 
     mutating func finish(in host: BurmeseEditHost) {
         let context = host.context
-        let tail = marked
-        if !tail.isEmpty, owner?.document == context.document {
-            if owner == context { host.insert(tail) }
+        if isMarked, owner?.document == context.document {
+            if owner == context { host.insert(pending.text) }
             else { host.unmark() }
         }
         self = BurmeseHostEditor()
@@ -203,23 +235,23 @@ struct BurmeseHostEditor {
     /// UIKit omits the marked suffix from documentContextBeforeInput. Some
     /// hosts already include it, so compare against the captured boundary.
     func contextForSuggestions(_ raw: HostContext) -> HostContext {
-        let tail = marked
-        guard owner == raw, !tail.isEmpty, raw.before == markBoundary else { return raw }
-        return HostContext(document: raw.document, before: (raw.before ?? "") + tail,
+        guard owner == raw, isMarked, raw.before == markBoundary else { return raw }
+        return HostContext(document: raw.document, before: (raw.before ?? "") + pending.text,
                            after: raw.after, selection: raw.selection)
     }
 
     /// Ordinary text allows host selections, suggestions and native deletion.
     /// Use this path only while the proxy exposes the complete anchored input.
     private mutating func writePlain(_ next: BurmeseComposition, anchor: String, in host: BurmeseEditHost) {
-        let old = committed.unicodeScalars, new = next.text.unicodeScalars
+        let old = (anchor + pending.text).unicodeScalars, new = (anchor + next.text).unicodeScalars
         let shared = zip(old, new).prefix(while: { $0 == $1 }).count
         var kept = old[...]
         while kept.count > shared {
             let context = host.context
-            guard let left = context.before, let last = left.last,
-                  last.unicodeScalars.count <= kept.count,
-                  left.unicodeScalars.elementsEqual((anchor + String(kept)).unicodeScalars) else { break }
+            guard let left = context.before, let last = left.last, left.unicodeScalars.elementsEqual(kept) else {
+                self = BurmeseHostEditor()
+                return
+            }
             host.deleteBackward()
             let after = host.context
             guard after.document == context.document, after.after == context.after,
@@ -227,25 +259,23 @@ struct BurmeseHostEditor {
                 self = BurmeseHostEditor()
                 return
             }
-            let actual = after.before ?? (host.hasText ? nil : "")
-            guard let actual,
-                  let deleted = BurmeseDeletion.removedSuffix(before: left, after: actual),
-                  kept.suffix(deleted.unicodeScalars.count).elementsEqual(deleted.unicodeScalars) else {
+            let atStart = kept.count == last.unicodeScalars.count && after.after?.isEmpty == false
+            let actual = after.before ?? (!host.hasText || atStart ? "" : nil)
+            guard let actual, let removed = BurmeseDeletion.removedSuffix(before: left, after: actual),
+                  kept.suffix(removed.unicodeScalars.count).elementsEqual(removed.unicodeScalars) else {
                 self = BurmeseHostEditor()
                 return
             }
-            kept = kept.dropLast(deleted.unicodeScalars.count)
+            kept = kept.dropLast(removed.unicodeScalars.count)
         }
-        guard kept.count <= shared else {
-            // The active text touches a host-owned grapheme. Keep it intact.
-            self = BurmeseHostEditor()
-            return
-        }
-        host.insert(String(new.dropFirst(kept.count)))
-        committed = next.text
+        // UIKit can delete a whole grapheme, including a character before
+        // our joiner. Restore its verified prefix along with the new syllable.
+        let insertion = String(new.dropFirst(kept.count))
+        if !insertion.isEmpty { host.insert(insertion) }
+        isMarked = false
         pending = next
         owner = host.context
-        if owner?.before?.unicodeScalars.elementsEqual((anchor + committed).unicodeScalars) != true {
+        if owner?.before?.unicodeScalars.elementsEqual((anchor + pending.text).unicodeScalars) != true {
             plainAnchor = nil
         }
     }
@@ -259,58 +289,83 @@ struct BurmeseHostEditor {
         var next = pending
         next.append(key)
         if let anchor = plainAnchor, context.selection?.isEmpty != false,
-           context.before?.unicodeScalars.elementsEqual((anchor + committed).unicodeScalars) == true {
+           context.before?.unicodeScalars.elementsEqual((anchor + pending.text).unicodeScalars) == true {
             writePlain(next, anchor: anchor, in: host)
             return
         }
-        if !next.text.unicodeScalars.starts(with: committed.unicodeScalars) {
-            // An extra or conflicting mark begins a new group. Never edit
-            // text already committed to the document.
+        if !isMarked && !pending.isEmpty {
+            // The proxy lost its anchor. This tap can only own a new range.
             finish(in: host)
             next = BurmeseComposition()
             next.append(key)
         }
-        let startingMark = marked.isEmpty
+        if pending.isEmpty {
+            markBoundary = context.before
+            emptyBoundary = context.before == nil && (!host.hasText || context.selection?.isEmpty == false)
+        }
         pending = next
-        let scalars = next.text.unicodeScalars
-        let stable = next.stablePrefixLength
-        let written = committed.unicodeScalars.count
-        if stable > written {
-            host.insert(String(scalars.dropFirst(written).prefix(stable - written)))
-            committed = String(scalars.prefix(stable))
-        }
-        let tail = marked
-        if !tail.isEmpty {
-            if startingMark || stable > written { markBoundary = host.context.before }
-            host.mark(tail)
-        }
+        isMarked = true
+        host.mark(next.text)
         let updated = host.context
-        if updated.document == context.document {
-            if owner == nil, written == 0, tail.isEmpty, context.selection?.isEmpty != false,
-               context.before != nil || context.after == nil,
-               updated.before?.unicodeScalars.elementsEqual(((context.before ?? "") + committed).unicodeScalars) == true {
-                plainAnchor = context.before ?? ""
+        guard updated.document == context.document else { self = BurmeseHostEditor(); return }
+        // Finish a readable native mark within this key event. A later host
+        // selection or Backspace must operate on ordinary selectable text.
+        if let boundary {
+            let full = boundary + next.text
+            let exposesRange = updated.before?.unicodeScalars.elementsEqual(full.unicodeScalars) == true
+            // A window exposing just one grapheme can contain both a leading
+            // joiner and the previous character. Keep that ambiguous mark native.
+            let separateBoundary = boundary.isEmpty || full.count > 1
+            guard updated.before == markBoundary || (exposesRange && separateBoundary) else {
+                owner = updated
+                return
             }
-            owner = updated
-        } else {
-            self = BurmeseHostEditor()
+            host.unmark()
+            // Some hosts exclude the marked text before unmarking.
+            if host.context.before?.unicodeScalars.elementsEqual((boundary + next.text).unicodeScalars) == true {
+                plainAnchor = boundary
+            }
+            isMarked = false
         }
+        owner = host.context
     }
 
     mutating func backspace(in host: BurmeseEditHost) {
         // Let UIKit handle a real selection even when the proxy previously
         // hid it behind a marked range. Never regenerate a mark on Backspace.
-        if !marked.isEmpty, owner?.document == host.context.document { host.unmark() }
-        self = BurmeseHostEditor()
+        let owned = owner != nil && owner == host.context
+        if isMarked, owner?.document == host.context.document { host.unmark() }
+        let active = pending
+        let expectedAnchor = plainAnchor ?? boundary
         let before = host.context
+        self = BurmeseHostEditor()
         host.deleteBackward()
         let after = host.context
         guard before.document != nil, before.document == after.document, before.after == after.after,
               before.selection?.isEmpty != false, after.selection?.isEmpty != false,
               let previous = before.before else { return }
-        let left = after.before ?? (host.hasText ? nil : "")
-        if let restore = BurmeseDeletion.retainedScalars(before: previous, afterHostDelete: left) {
+        let ownsSuffix = owned && !active.isEmpty && expectedAnchor.map {
+            previous.unicodeScalars.elementsEqual(($0 + active.text).unicodeScalars)
+        } == true
+        let deletedAtStart = ownsSuffix && expectedAnchor == "" && after.after?.isEmpty == false
+        let left = after.before ?? (!host.hasText || deletedAtStart ? "" : nil)
+        if ownsSuffix, let left, let removed = BurmeseDeletion.removedSuffix(before: previous, after: left) {
+            // A joiner can make the preceding space or Latin letter part of
+            // the same grapheme. Preserve that neighbor on a verified delete.
+            let retained = removed.unicodeScalars.dropLast()
+            if !retained.isEmpty { host.insert(String(retained)) }
+        } else if let restore = BurmeseDeletion.retainedScalars(before: previous, afterHostDelete: left) {
             host.insert(restore)
         }
+        // Continue composing only the surviving part of our own segment.
+        // Pasted text, selections and moved carets are never adopted.
+        guard ownsSuffix, let anchor = expectedAnchor else { return }
+        var survivor = active
+        survivor.backspace()
+        guard !survivor.isEmpty, let finalLeft = host.context.before,
+              finalLeft.unicodeScalars.elementsEqual((anchor + survivor.text).unicodeScalars) else { return }
+        pending = survivor
+        plainAnchor = anchor
+        owner = host.context
     }
 }

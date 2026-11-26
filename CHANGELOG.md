@@ -14,7 +14,7 @@ This first version brings English and Burmese typing to one keyboard for iPhone 
 - Scroll the emoji catalog, search in English or Burmese, and hold an emoji for available skin tones.
 - Choose System, Light, or Dark keyboard appearance. The companion app includes a practice field, Burmese setup instructions, and a Home Screen icon with light and dark artwork.
 
-- Type Burmese combining vowels and medials in MyanSan order or the supported reverse order. Pretyped ေ also works with stacked consonants.
+- Type ကို with either vowel first. Burmese composition follows Android Gboard for repeated marks, pretyped ေ with stacks or kinzi, and the letter sequences for ဈ, ဦ, ဩ and ဪ.
 - The practice app links to the public privacy policy and support contact.
 
 **Validation so far** · Simulator checks covered typing, deletion, completions and emoji. Build 9 adds verified Burmese vowel reordering and Backspace handling for bounded host context. English suggestions respect mid-word edits and learned casing. Emoji search clears host suggestions, and English Shift reuses the existing keys. Build 8 was installed on an iPhone 15 Plus. Cross-app editing and sustained typing performance on a physical iPhone still need testing. Portrait iPhone is the reference layout.

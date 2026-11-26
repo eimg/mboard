@@ -6,6 +6,7 @@ let package = Package(
     products: [.library(name: "MBoardCore", targets: ["MBoardCore"])],
     targets: [
         .target(name: "MBoardCore", path: "Core", resources: [.copy("Resources/BurmeseWords.txt"), .copy("Resources/BurmeseWords-LICENSE.txt")]),
-        .testTarget(name: "MBoardCoreTests", dependencies: ["MBoardCore"], path: "Tests")
+        .testTarget(name: "MBoardCoreTests", dependencies: ["MBoardCore"], path: "Tests",
+                    resources: [.copy("Fixtures/GboardBurmese.tsv")])
     ]
 )
