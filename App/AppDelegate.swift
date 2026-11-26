@@ -28,7 +28,7 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
     private lazy var practiceCell = makePracticeCell()
     private let instructions = [
         "Settings ထဲက General → Keyboard → Keyboards → Add New Keyboard ကို သွားပြီး MBoard ကို ရွေးပါ။",
-        "🌐 ကို ဖိထားပြီး MBoard ကို ရွေးပါ။ English နဲ့ မြန်မာ ပြောင်းဖို့ Keyboard အပေါ်ဘက်က Language Button ကို နှိပ်ပါ။"
+        "🌐 ကို ဖိထားပြီး MBoard ကို ရွေးပါ။ English နဲ့ မြန်မာ ပြောင်းဖို့ Keyboard အောက်ဆုံးတန်းရဲ့ ဘယ်ဘက်က “abc” ဒါမှမဟုတ် “ကခ” ကို နှိပ်ပါ။"
     ]
 
     private let links = [

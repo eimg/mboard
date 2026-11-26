@@ -5,26 +5,82 @@ enum Language: String {
     var title: String { self == .burmese ? "မြန်မာ" : "English" }
 }
 
+/// Only a pair of Space key taps at the same insertion point can end a sentence.
+struct DoubleSpaceShortcut {
+    private var first: (time: Date, language: Language, context: HostContext)?
+
+    private func followsFirstSpace(_ context: HostContext) -> Bool {
+        guard let first, let prefix = first.context.before, let left = context.before,
+              context.document == first.context.document, context.after == first.context.after,
+              context.selection?.isEmpty != false, left.last == " " else { return false }
+        // iOS may slide its surrounding-text window after inserting a space.
+        let expected = (prefix + " ").unicodeScalars.suffix(64)
+        let visible = left.unicodeScalars.suffix(64)
+        let length = min(expected.count, visible.count)
+        return length >= 2 && expected.suffix(length).elementsEqual(visible.suffix(length))
+    }
+
+    mutating func selectionChanged(to context: HostContext) {
+        if !followsFirstSpace(context) { first = nil }
+    }
+
+    mutating func separator(for language: Language, at context: HostContext,
+                            now: Date = Date()) -> String? {
+        let completesPair = first.map {
+            $0.language == language && (0...0.45).contains(now.timeIntervalSince($0.time))
+        } == true && followsFirstSpace(context)
+        first = nil
+        if completesPair { return language == .english ? ". " : "။ " }
+        guard context.document != nil, context.selection?.isEmpty != false,
+              let last = context.before?.last else { return nil }
+        if last.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) })
+            || ")]}’”\"'".contains(last) {
+            first = (now, language, context)
+        }
+        return nil
+    }
+}
+
 enum EnglishCapitalization {
     case none, words, sentences, allCharacters
 
-    func shouldShift(before text: String) -> Bool {
+    private static func isBurmeseText(_ scalar: Unicode.Scalar) -> Bool {
+        (0x1000...0x109F).contains(scalar.value) &&
+            (CharacterSet.letters.contains(scalar) || CharacterSet.nonBaseCharacters.contains(scalar))
+    }
+
+    private static func containsBurmeseInSentence<S: Sequence>(_ scalars: S) -> Bool
+        where S.Element == Unicode.Scalar {
+        for scalar in scalars {
+            if CharacterSet.newlines.contains(scalar) || ".!?။…".unicodeScalars.contains(scalar) { break }
+            if isBurmeseText(scalar) { return true }
+        }
+        return false
+    }
+
+    func shouldShift(before text: String, after: String = "") -> Bool {
         switch self {
         case .none: return false
         case .allCharacters: return true
-        case .words: return text.last?.isWhitespace ?? true
-        case .sentences:
+        case .words, .sentences:
             var context = text[...]
             let quotes = "\"'“‘([{"
             while let last = context.last, quotes.contains(last) { context.removeLast() }
             guard let last = context.last else { return true }
+            if let scalar = last.unicodeScalars.last, Self.isBurmeseText(scalar) { return true }
+            if last == "၊" || last == "။" { return true }
             guard last.isWhitespace else { return false }
+            if self == .words { return true }
             while let space = context.last, space.isWhitespace {
                 if space.isNewline { return true }
                 context.removeLast()
             }
             while let closing = context.last, "\"'”’)]}".contains(closing) { context.removeLast() }
-            return context.last.map { ".!?။…".contains($0) } ?? true
+            guard let preceding = context.last else { return true }
+            if ".!?။…".contains(preceding) { return true }
+            // At a word boundary, English words in a Burmese sentence start with a capital.
+            return Self.containsBurmeseInSentence(context.unicodeScalars.reversed()) ||
+                Self.containsBurmeseInSentence(after.unicodeScalars)
         }
     }
 }

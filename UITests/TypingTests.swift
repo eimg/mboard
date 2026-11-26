@@ -1,6 +1,29 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    func testSentenceShortcutsAndSymbolPagesInBothLanguages() {
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        if app.buttons["Switch to Burmese"].exists { app.buttons["Switch to Burmese"].tap() }
+        app.buttons["key.က"].tap()
+        app.buttons["Space"].doubleTap()
+        XCTAssertEqual(field.value as? String, "က။ ")
+        app.buttons["Switch to English"].tap()
+        let letter = app.buttons["key.Q"].exists ? "Q" : "q"
+        app.buttons["key." + letter].tap()
+        app.buttons["Space"].doubleTap()
+        XCTAssertEqual(field.value as? String, "က။ " + letter + ". ")
+        app.buttons["Show symbols"].tap()
+        app.buttons["Space"].tap()
+        app.buttons["key.1"].tap()
+        app.buttons["key.2"].tap()
+        app.buttons["Space"].tap()
+        app.buttons["key.q"].tap()
+        XCTAssertEqual(field.value as? String, "က။ " + letter + ".  12 q")
+    }
+
     func testEmojiSearchClearsVisibleHostSuggestions() {
         let app = XCUIApplication()
         app.launch()
@@ -64,12 +87,12 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "ကျောင်")
         app.buttons["Space"].tap()
         englishSwitch.tap()
-        tapKey("h")
+        tapKey("H")
         tapKey("e")
-        let hello = app.buttons["hello"]
+        let hello = app.buttons["completion.Hello"]
         XCTAssertTrue(hello.waitForExistence(timeout: 3))
         hello.tap()
-        let mixedText = "ကျောင် hello"
+        let mixedText = "ကျောင် Hello"
         XCTAssertEqual(field.value as? String, mixedText)
 
         let cKey = app.buttons["key.c"]

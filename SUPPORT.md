@@ -6,10 +6,10 @@ For help with MBoard on iPhone or iPad, email [eimg@fairwayweb.com](mailto:eimg@
 
 1. Open **Settings → General → Keyboard → Keyboards → Add New Keyboard** and choose **MBoard**.
 2. Open the MBoard practice app and tap the writing field. If you use a hardware keyboard on iPad, show the onscreen keyboard first.
-3. Hold the system globe and select **MBoard**. Use the language switch on MBoard’s toolbar for Burmese or English.
+3. Hold the system globe and select **MBoard**. Use the far-left key on the bottom row. Tap **abc** for English or **ကခ** for Burmese.
 
 MBoard works with Full Access off. The system keyboard appears in password fields, some phone-number fields, and apps that restrict third-party keyboards.
 
 ## Manage suggestions
 
-Long-press a learned suggestion and choose **Forget This Suggestion**, or tap the MBoard logo at the top right and choose **Clear Learned Words → Clear for Both Languages**. To hide the suggestion bar’s candidates, turn off **Word Suggestions**. [Privacy policy](PRIVACY.md)
+Long-press a learned suggestion and choose **Forget This Suggestion**, or tap the settings gear at the top right and choose **Clear Learned Words → Clear for Both Languages**. To hide the suggestion bar’s candidates, turn off **Word Suggestions**. [Privacy policy](PRIVACY.md)

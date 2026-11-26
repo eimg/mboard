@@ -29,3 +29,9 @@ The picker opened on Smileys & Emotions. It showed an eight-column grid, search,
 The emulator ran Gboard 18.6.3.1002251336 with English (US) QWERTY and Burmese enabled. In **Corrections & suggestions**, **Auto-capitalization** was on and its description specified the first word of each sentence. **Suggestion strip** and **Word suggestions** were separate switches, both on. Auto-correction, spell check, grammar check, and next-word suggestions were also on. Contact suggestions were off.
 
 In **Preferences**, the regular number row was off. The dedicated emoji, comma, and period keys were on. The dedicated language-switch key was off. MBoard adopts the auto-capitalization and word-suggestion switches while retaining its existing language control.
+
+## Symbol pages and sentence endings
+
+In a plain text field on the Android API 35 emulator, Gboard 14.2.09 kept both English and Burmese symbol pages open after digits, punctuation and second-page symbols. Tapping Space immediately after opening either page left it open. After entering a symbol, Space returned to letters, even after changing symbol pages or deleting the symbol. In a multiline field, Return followed the same rule. The next tap at the first key produced q or ဈ on letters, 1 or ၁ on the first symbol page, and ~ on the second.
+
+After a word, two quick Space taps produced a period followed by one space in English and ။ followed by one space in Burmese. MBoard uses the same sentence endings and keeps its bottom-left language switch separate from its symbol key.

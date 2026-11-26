@@ -60,7 +60,6 @@ final class KeyboardViewController: UIInputViewController {
     private let toolbar = UIStackView()
     private let rows = UIStackView()
     private let candidates = UIStackView()
-    private let languageButton = UIButton(type: .system)
     private let settingsButton = UIButton(type: .system)
     private var height: NSLayoutConstraint?
     private var keyAreaTop: NSLayoutConstraint?
@@ -72,6 +71,8 @@ final class KeyboardViewController: UIInputViewController {
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
     private var shift = false
+    private var doubleSpace = DoubleSpaceShortcut()
+    private var typedOnSymbols = false
     private var symbolPage: Int?
     private var editor = BurmeseHostEditor()
     private var editHost: ProxyEditHost { ProxyEditHost(proxy: textDocumentProxy) }
@@ -130,40 +131,29 @@ final class KeyboardViewController: UIInputViewController {
         rows.spacing = 5
         toolbar.spacing = 3
         candidates.distribution = .fillEqually
-        toolbar.addArrangedSubview(languageButton)
-        toolbar.addArrangedSubview(candidates)
-        toolbar.addArrangedSubview(settingsButton)
-        languageButton.widthAnchor.constraint(equalToConstant: 66).isActive = true
-        settingsButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        var switchConfiguration = UIButton.Configuration.plain()
-        switchConfiguration.image = UIImage(systemName: "arrow.left.arrow.right",
-                                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
-        switchConfiguration.imagePlacement = .trailing
-        switchConfiguration.imagePadding = 4
-        switchConfiguration.contentInsets = .zero
-        switchConfiguration.baseForegroundColor = KeyColors.ink
-        switchConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var attributes = incoming
-            attributes.font = .systemFont(ofSize: 14, weight: .semibold)
-            return attributes
-        }
-        languageButton.configuration = switchConfiguration
-        languageButton.addAction(UIAction { [weak self] _ in self?.switchLanguage() }, for: .touchUpInside)
+        let brand = UIView()
         let mark = UIImageView(image: UIImage(named: "MBoardMark"))
         mark.translatesAutoresizingMaskIntoConstraints = false
         mark.layer.cornerRadius = 6
         mark.layer.cornerCurve = .continuous
         mark.clipsToBounds = true
-        mark.isAccessibilityElement = false
-        settingsButton.addSubview(mark)
+        brand.isUserInteractionEnabled = false
+        brand.addSubview(mark)
+        toolbar.addArrangedSubview(brand)
+        toolbar.addArrangedSubview(candidates)
+        toolbar.addArrangedSubview(settingsButton)
         NSLayoutConstraint.activate([
-            mark.centerXAnchor.constraint(equalTo: settingsButton.centerXAnchor),
-            mark.centerYAnchor.constraint(equalTo: settingsButton.centerYAnchor),
-            mark.widthAnchor.constraint(equalToConstant: 24),
-            mark.heightAnchor.constraint(equalTo: mark.widthAnchor)
+            brand.widthAnchor.constraint(equalToConstant: 36),
+            mark.centerXAnchor.constraint(equalTo: brand.centerXAnchor),
+            mark.centerYAnchor.constraint(equalTo: brand.centerYAnchor),
+            mark.widthAnchor.constraint(equalToConstant: 27),
+            mark.heightAnchor.constraint(equalTo: mark.widthAnchor),
+            settingsButton.widthAnchor.constraint(equalToConstant: 36)
         ])
+        let gearSize = UIImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+        settingsButton.setImage(UIImage(systemName: "gearshape", withConfiguration: gearSize), for: .normal)
+        settingsButton.tintColor = KeyColors.ink
         settingsButton.accessibilityLabel = "MBoard Keyboard Settings"
-        languageButton.tintColor = KeyColors.ink
         settingsButton.showsMenuAsPrimaryAction = true
         primaryLanguage = language.rawValue
         configureAppearance()
@@ -196,6 +186,8 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        doubleSpace = DoubleSpaceShortcut()
+        typedOnSymbols = false
         closeEmoji()
         finishComposition()
         cancelGestures()
@@ -211,11 +203,8 @@ final class KeyboardViewController: UIInputViewController {
         case "Dark": board.overrideUserInterfaceStyle = .dark
         case "Light": board.overrideUserInterfaceStyle = .light
         default:
-            switch textDocumentProxy.keyboardAppearance {
-            case .dark: board.overrideUserInterfaceStyle = .dark
-            case .light: board.overrideUserInterfaceStyle = .light
-            default: board.overrideUserInterfaceStyle = .unspecified
-            }
+            // UIKit updates the input view's traits for both the host field and live theme changes.
+            board.overrideUserInterfaceStyle = .unspecified
         }
     }
 
@@ -268,7 +257,7 @@ final class KeyboardViewController: UIInputViewController {
         case .allCharacters: mode = .allCharacters
         default: mode = .sentences
         }
-        return mode.shouldShift(before: context.before ?? "")
+        return mode.shouldShift(before: context.before ?? "", after: context.after ?? "")
     }
 
     private func updateEnglishShift() {
@@ -280,6 +269,8 @@ final class KeyboardViewController: UIInputViewController {
     private func switchLanguage() {
         if isSearchingEmoji { emojiPicker?.commitQueryComposition() }
         else { finishComposition() }
+        doubleSpace = DoubleSpaceShortcut()
+        typedOnSymbols = false
         language = language == .burmese ? .english : .burmese
         primaryLanguage = language.rawValue
         UserDefaults.standard.set(language.rawValue, forKey: "language")
@@ -397,8 +388,7 @@ final class KeyboardViewController: UIInputViewController {
         previousSwitchRequirement = needsInputModeSwitchKey
         currentReturnKey = textDocumentProxy.returnKeyType
         rows.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        languageButton.configuration?.title = language == .burmese ? "EN" : "မြန်မာ"
-        languageButton.accessibilityLabel = language == .burmese ? "Switch to English" : "Switch to Burmese"
+        let digitsLabel = language == .burmese ? "၁၂၃" : "123"
         let letterRows = symbolPage.map { KeyboardLayout.symbols(language, second: $0 == 2) }
             ?? KeyboardLayout.letters(language, shift: shift)
         for (i, letters) in letterRows.enumerated() {
@@ -407,13 +397,15 @@ final class KeyboardViewController: UIInputViewController {
             if i == letterRows.count - 1 {
                 let toggle: KeyButton
                 if let page = symbolPage {
-                    toggle = command(page == 1 ? "=\\<" : "?123") { [weak self] in
+                    toggle = command(page == 1 ? "=\\<" : digitsLabel) { [weak self] in
+                        self?.doubleSpace = DoubleSpaceShortcut()
                         self?.symbolPage = page == 1 ? 2 : 1
                         self?.rebuild()
                     }
                 } else {
                     toggle = command("Shift", symbol: shift ? "shift.fill" : "shift") { [weak self] in
                         guard let self else { return }
+                        doubleSpace = DoubleSpaceShortcut()
                         shift.toggle()
                         if language == .english {
                             manualShiftContext = HostContext(textDocumentProxy)
@@ -444,16 +436,22 @@ final class KeyboardViewController: UIInputViewController {
         }
         let bottom = UIStackView()
         bottom.spacing = 4
-        let symbols = command(symbolPage == nil ? (language == .burmese ? "?၁၂၃" : "?123") :
+        let symbols = command(symbolPage == nil ? digitsLabel :
                                 (language == .burmese ? "ကခ" : "ABC")) { [weak self] in
             guard let self else { return }
             if self.isSearchingEmoji { self.emojiPicker?.commitQueryComposition() }
             else { self.finishComposition() }
+            self.doubleSpace = DoubleSpaceShortcut()
+            self.typedOnSymbols = false
             self.symbolPage = self.symbolPage == nil ? 1 : nil
             self.manualShiftContext = nil
             self.shift = self.language == .english && self.symbolPage == nil && self.englishShift(for: HostContext(self.textDocumentProxy))
             self.rebuild()
         }
+        symbols.accessibilityLabel = symbolPage == nil ? "Show symbols" : "Show letters"
+        let languages = command(language == .burmese ? "abc" : "ကခ") { [weak self] in self?.switchLanguage() }
+        languages.accessibilityLabel = language == .burmese ? "Switch to English" : "Switch to Burmese"
+        bottom.addArrangedSubview(languages)
         bottom.addArrangedSubview(symbols)
         if needsInputModeSwitchKey {
             let globe = KeyButton(title: "Next keyboard", symbol: "globe", modifier: true)
@@ -465,7 +463,7 @@ final class KeyboardViewController: UIInputViewController {
         if symbolPage == nil && !isSearchingEmoji {
             bottom.addArrangedSubview(command("Emoji", symbol: "face.smiling") { [weak self] in self?.openEmoji() })
         }
-        let space = command(language.title) { [weak self] in self?.insertLiteral(" ") }
+        let space = command(language.title) { [weak self] in self?.tapSpace() }
         space.accessibilityLabel = "Space"
         space.fill = KeyColors.letter
         bottom.addArrangedSubview(space)
@@ -478,12 +476,18 @@ final class KeyboardViewController: UIInputViewController {
         bottom.addArrangedSubview(enter)
         rows.addArrangedSubview(bottom)
         for button in bottom.arrangedSubviews where button !== space {
-            let fraction = button === symbols || button === enter ? 0.14 : 0.09
+            let fraction: CGFloat
+            switch button {
+            case enter: fraction = 0.14
+            case symbols: fraction = 0.11
+            default: fraction = 0.09
+            }
             button.widthAnchor.constraint(equalTo: bottom.widthAnchor, multiplier: fraction).isActive = true
         }
     }
 
     private func openEmoji() {
+        doubleSpace = DoubleSpaceShortcut()
         finishComposition()
         cancelGestures()
         guard emojiPicker == nil else { return }
@@ -548,6 +552,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func insert(_ value: String) {
+        doubleSpace = DoubleSpaceShortcut()
+        if symbolPage != nil { typedOnSymbols = true }
         let composes = language == .burmese && symbolPage == nil && BurmeseComposition.canCompose(value)
         if isSearchingEmoji {
             emojiPicker?.appendToQuery(value, composingBurmese: composes)
@@ -562,6 +568,32 @@ final class KeyboardViewController: UIInputViewController {
         didType()
     }
 
+    private func tapSpace() {
+        if isSearchingEmoji {
+            emojiPicker?.appendToQuery(" ")
+        } else {
+            finishComposition()
+            let proxy = textDocumentProxy
+            if let separator = doubleSpace.separator(for: language, at: HostContext(proxy)) {
+                proxy.deleteBackward()
+                proxy.insertText(separator)
+            } else {
+                proxy.insertText(" ")
+            }
+        }
+        returnToLettersAfterSeparator()
+        didType()
+    }
+
+    private func returnToLettersAfterSeparator() {
+        guard symbolPage != nil, typedOnSymbols else { return }
+        symbolPage = nil
+        typedOnSymbols = false
+        manualShiftContext = nil
+        shift = language == .english && englishShift(for: HostContext(textDocumentProxy))
+        rebuild()
+    }
+
     private func insertLiteral(_ value: String) {
         if isSearchingEmoji {
             if value == "\n" { emojiPicker?.confirmSearch() }
@@ -570,9 +602,11 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
         insertHostText(value)
+        if value == "\n" { returnToLettersAfterSeparator() }
     }
 
     private func insertHostText(_ value: String) {
+        doubleSpace = DoubleSpaceShortcut()
         finishComposition()
         textDocumentProxy.insertText(value)
         didType()
@@ -589,6 +623,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func backspace() {
+        doubleSpace = DoubleSpaceShortcut()
         if isSearchingEmoji {
             emojiPicker?.deleteQueryCharacter()
             return
@@ -657,14 +692,15 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {
-        editor.check(HostContext(textDocumentProxy), in: editHost)
+        let context = HostContext(textDocumentProxy)
+        doubleSpace.selectionChanged(to: context)
+        editor.check(context, in: editHost)
         updateEnglishShift()
         updateSuggestions()
     }
     override func textDidChange(_ textInput: UITextInput?) {
         guard isViewLoaded else { return }
         editor.check(HostContext(textDocumentProxy), in: editHost)
-        configureAppearance()
         updateEnglishShift()
         if currentReturnKey != textDocumentProxy.returnKeyType { rebuild() }
         updateSuggestions()

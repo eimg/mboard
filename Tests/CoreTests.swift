@@ -13,6 +13,39 @@ final class CoreTests: XCTestCase {
         return (committed + core.text).unicodeScalars.map(\.value)
     }
 
+    func testDoubleSpaceUsesTheActiveLanguageAndOnlyAnOwnedSpace() {
+        let document = UUID(), other = UUID()
+        let now = Date(timeIntervalSinceReferenceDate: 100)
+        func context(_ left: String?, _ right: String? = nil, selection: String? = nil, id: UUID? = nil) -> HostContext {
+            HostContext(document: id ?? document, before: left, after: right, selection: selection)
+        }
+        func pair(_ first: HostContext, _ second: HostContext, _ language: Language = .english,
+                  delay: TimeInterval = 0.2) -> String? {
+            var shortcut = DoubleSpaceShortcut()
+            XCTAssertNil(shortcut.separator(for: language, at: first, now: now))
+            return shortcut.separator(for: language, at: second, now: now.addingTimeInterval(delay))
+        }
+
+        XCTAssertEqual(pair(context("hello"), context("hello ")), ". ")
+        XCTAssertEqual(pair(context("ကျောင်း"), context("ကျောင်း "), .burmese), "။ ")
+        XCTAssertEqual(pair(context("123"), context("123 ")), ". ")
+        XCTAssertEqual(pair(context("long paragraph"), context("paragraph ")), ". ")
+        XCTAssertNil(pair(context("hello"), context("hello "), delay: 1))
+        XCTAssertNil(pair(context("hello"), context("hello ", id: other)))
+        XCTAssertNil(pair(context("hello"), context("hello ", selection: "selected")))
+        XCTAssertNil(pair(context("hello", "there"), context("hello ", "elsewhere")))
+        XCTAssertNil(pair(context("hello"), context("other ")))
+        XCTAssertNil(pair(context(nil), context(" ")))
+        var shortcut = DoubleSpaceShortcut()
+        XCTAssertNil(shortcut.separator(for: .english, at: context("hello"), now: now))
+        shortcut.selectionChanged(to: context("hello "))
+        shortcut.selectionChanged(to: context("he", "llo "))
+        XCTAssertNil(shortcut.separator(for: .english, at: context("hello "), now: now.addingTimeInterval(0.2)))
+        for prior in ["", " ", "hello.", "ပြီး။", "hello!"] {
+            XCTAssertNil(pair(context(prior), context(prior + " ")))
+        }
+    }
+
     func testReferenceSequences() {
         XCTAssertEqual(run(["ေ","က","ျ","ာ","င","်","း"]), [0x1000,0x103B,0x1031,0x102C,0x1004,0x103A,0x1038])
         XCTAssertEqual(run(["င","်","္","က"]), [0x1004,0x103A,0x1039,0x1000])
@@ -98,6 +131,20 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(EnglishCapitalization.words.shouldShift(before: "Fir"))
         XCTAssertTrue(EnglishCapitalization.allCharacters.shouldShift(before: "ab"))
         XCTAssertFalse(EnglishCapitalization.none.shouldShift(before: ""))
+    }
+
+    func testEnglishWordsInBurmeseSentences() {
+        let mode = EnglishCapitalization.sentences
+        for prefix in ["ကျောင်း", "ကျောင်း ", "က၊", "ကို “", "ဒီမှာ App ", "ဒီမှာ App Store သုံး"] {
+            XCTAssertTrue(mode.shouldShift(before: prefix), prefix)
+        }
+        XCTAssertTrue(mode.shouldShift(before: "Try ", after: " သုံးပါ"))
+        for prefix in ["ကAp", "ဒီမှာ Don’", "ဒီမှာ Don'", "က။ This ", "က\nThis ", "က! This "] {
+            XCTAssertFalse(mode.shouldShift(before: prefix), prefix)
+        }
+        XCTAssertFalse(mode.shouldShift(before: "Try ", after: "this. က"))
+        XCTAssertTrue(EnglishCapitalization.words.shouldShift(before: "က"))
+        XCTAssertFalse(EnglishCapitalization.none.shouldShift(before: "က "))
     }
 
     func testReferenceLayout() {
