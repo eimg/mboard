@@ -25,6 +25,7 @@ private struct ProxyEditHost: BurmeseEditHost {
     func mark(_ text: String) {
         proxy.setMarkedText(text, selectedRange: NSRange(location: text.utf16.count, length: 0))
     }
+    func moveCaret(byUTF16 offset: Int) { proxy.adjustTextPosition(byCharacterOffset: offset) }
     func unmark() { proxy.unmarkText() }
     func deleteBackward() { proxy.deleteBackward() }
 }
@@ -626,7 +627,7 @@ final class KeyboardViewController: UIInputViewController {
             guard !Task.isCancelled, let self else { return }
             let apple = mode == .english ? englishCompletions.words(for: Completions.englishPrefix(in: recent)) : []
             let results = await Task.detached(priority: .utility) {
-                Completions.matches(before: recent, language: mode, apple: apple, learned: learned, allCaps: allCaps)
+                Completions.matches(before: recent, after: context.after, language: mode, apple: apple, learned: learned, allCaps: allCaps)
             }.value
             guard !Task.isCancelled, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
                   self.suggestionContext == context else { return }

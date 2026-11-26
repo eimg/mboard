@@ -184,7 +184,8 @@ enum BurmeseDeletion {
     static func retainedScalars(before: String, afterHostDelete: String?) -> String? {
         guard let afterHostDelete, let removed = removedSuffix(before: before, after: afterHostDelete),
               removed.unicodeScalars.count > 1,
-              removed.unicodeScalars.allSatisfy({ (0x1000...0x109F).contains($0.value) || $0.value == 0x200C })
+              let last = removed.unicodeScalars.last,
+              (0x1000...0x109F).contains(last.value) || last.value == 0x200C
         else { return nil }
         return String(removed.unicodeScalars.dropLast())
     }
@@ -205,6 +206,7 @@ protocol BurmeseEditHost {
     func mark(_ text: String)
     func unmark()
     func deleteBackward()
+    func moveCaret(byUTF16 offset: Int)
 }
 
 /// Keep one active syllable. A native marked range protects input when the
@@ -228,8 +230,18 @@ struct BurmeseHostEditor {
         self = BurmeseHostEditor()
     }
 
+    private func owns(_ context: HostContext) -> Bool {
+        guard let owner else { return false }
+        if owner == context { return true }
+        guard !isMarked, owner.document == context.document, owner.after == context.after,
+              context.selection?.isEmpty != false, let expected = owner.before,
+              let left = context.before, endsWith(left, pending.text) else { return false }
+        // Inserting into a bounded context shifts its leading edge.
+        return endsWith(expected, left) || endsWith(left, expected)
+    }
+
     mutating func check(_ context: HostContext, in host: BurmeseEditHost) {
-        if let owner, owner != context { finish(in: host) }
+        if owner != nil, !owns(context) { finish(in: host) }
     }
 
     /// UIKit omits the marked suffix from documentContextBeforeInput. Some
@@ -240,44 +252,67 @@ struct BurmeseHostEditor {
                            after: raw.after, selection: raw.selection)
     }
 
-    /// Ordinary text allows host selections, suggestions and native deletion.
-    /// Use this path only while the proxy exposes the complete anchored input.
-    private mutating func writePlain(_ next: BurmeseComposition, anchor: String, in host: BurmeseEditHost) {
-        let old = (anchor + pending.text).unicodeScalars, new = (anchor + next.text).unicodeScalars
-        let shared = zip(old, new).prefix(while: { $0 == $1 }).count
-        var kept = old[...]
-        while kept.count > shared {
-            let context = host.context
-            guard let left = context.before, let last = left.last, left.unicodeScalars.elementsEqual(kept) else {
+    private func endsWith(_ left: String?, _ suffix: String) -> Bool {
+        left?.unicodeScalars.suffix(suffix.unicodeScalars.count).elementsEqual(suffix.unicodeScalars) == true
+    }
+
+    /// Edit only the differing scalars. A vowel inserted before another mark
+    /// moves the caret temporarily and never deletes the existing syllable.
+    private mutating func writePlain(_ next: BurmeseComposition, key: String, in host: BurmeseEditHost) {
+        let original = host.context
+        let old = pending.text.unicodeScalars, new = next.text.unicodeScalars
+        let shared = zip(old, new).prefix { $0 == $1 }.count
+        let oldTail = old.dropFirst(shared), newTail = new.dropFirst(shared)
+        let trailing = zip(oldTail.reversed(), newTail.reversed()).prefix { $0 == $1 }.count
+        let removed = oldTail.dropLast(trailing)
+        let inserted = String(newTail.dropLast(trailing))
+        let suffix = String(oldTail.suffix(trailing))
+        let distance = String(oldTail).utf16.count
+        if distance > 0 {
+            host.moveCaret(byUTF16: -distance)
+        }
+        if removed.isEmpty {
+            if !inserted.isEmpty { host.insert(inserted) }
+        } else {
+            // Some editors delete a whole grapheme and can stop exposing the
+            // left context after that call. Stage the replacement first. A
+            // zero-width space is a grapheme break on both sides, so each
+            // superseded scalar and finally the separator delete individually.
+            let separator = "\u{200B}"
+            host.insert(separator)
+            guard endsWith(host.context.before, separator) else {
+                // A constrained field may reject the separator. Leave its
+                // existing text intact and submit the key as ordinary input.
+                host.moveCaret(byUTF16: distance)
+                host.insert(key)
                 self = BurmeseHostEditor()
                 return
+            }
+            if !inserted.isEmpty {
+                host.moveCaret(byUTF16: -1)
+                host.insert(inserted)
+                let accepted = endsWith(host.context.before, inserted)
+                host.moveCaret(byUTF16: 1)
+                if !accepted {
+                    host.deleteBackward() // Remove only the confirmed separator.
+                    host.moveCaret(byUTF16: distance)
+                    self = BurmeseHostEditor()
+                    return
+                }
+            }
+            for scalar in removed {
+                host.moveCaret(byUTF16: String(scalar).utf16.count)
+                host.deleteBackward()
             }
             host.deleteBackward()
-            let after = host.context
-            guard after.document == context.document, after.after == context.after,
-                  after.selection?.isEmpty != false else {
-                self = BurmeseHostEditor()
-                return
-            }
-            let atStart = kept.count == last.unicodeScalars.count && after.after?.isEmpty == false
-            let actual = after.before ?? (!host.hasText || atStart ? "" : nil)
-            guard let actual, let removed = BurmeseDeletion.removedSuffix(before: left, after: actual),
-                  kept.suffix(removed.unicodeScalars.count).elementsEqual(removed.unicodeScalars) else {
-                self = BurmeseHostEditor()
-                return
-            }
-            kept = kept.dropLast(removed.unicodeScalars.count)
         }
-        // UIKit can delete a whole grapheme, including a character before
-        // our joiner. Restore its verified prefix along with the new syllable.
-        let insertion = String(new.dropFirst(kept.count))
-        if !insertion.isEmpty { host.insert(insertion) }
-        isMarked = false
+        if !suffix.isEmpty { host.moveCaret(byUTF16: suffix.utf16.count) }
         pending = next
-        owner = host.context
-        if owner?.before?.unicodeScalars.elementsEqual((anchor + pending.text).unicodeScalars) != true {
-            plainAnchor = nil
-        }
+        // Cursor moves are delivered to UIKit in order, but an immediate
+        // proxy read can still describe an intermediate caret position.
+        let prefix = String((original.before ?? "").unicodeScalars.dropLast(old.count))
+        owner = HostContext(document: original.document, before: prefix + next.text,
+                            after: original.after, selection: original.selection)
     }
 
     mutating func type(_ key: String, in host: BurmeseEditHost) {
@@ -288,9 +323,8 @@ struct BurmeseHostEditor {
 
         var next = pending
         next.append(key)
-        if let anchor = plainAnchor, context.selection?.isEmpty != false,
-           context.before?.unicodeScalars.elementsEqual((anchor + pending.text).unicodeScalars) == true {
-            writePlain(next, anchor: anchor, in: host)
+        if plainAnchor != nil, context.selection?.isEmpty != false, endsWith(context.before, pending.text) {
+            writePlain(next, key: key, in: host)
             return
         }
         if !isMarked && !pending.isEmpty {
@@ -321,11 +355,12 @@ struct BurmeseHostEditor {
                 return
             }
             host.unmark()
-            // Some hosts exclude the marked text before unmarking.
-            if host.context.before?.unicodeScalars.elementsEqual((boundary + next.text).unicodeScalars) == true {
-                plainAnchor = boundary
-            }
+            plainAnchor = boundary
             isMarked = false
+            // The proxy can report its old window until the next key event.
+            // Verify the predicted caret against the next live context.
+            owner = HostContext(document: context.document, before: full, after: context.after, selection: nil)
+            return
         }
         owner = host.context
     }
@@ -333,7 +368,7 @@ struct BurmeseHostEditor {
     mutating func backspace(in host: BurmeseEditHost) {
         // Let UIKit handle a real selection even when the proxy previously
         // hid it behind a marked range. Never regenerate a mark on Backspace.
-        let owned = owner != nil && owner == host.context
+        let owned = owns(host.context)
         if isMarked, owner?.document == host.context.document { host.unmark() }
         let active = pending
         let expectedAnchor = plainAnchor ?? boundary
@@ -344,9 +379,7 @@ struct BurmeseHostEditor {
         guard before.document != nil, before.document == after.document, before.after == after.after,
               before.selection?.isEmpty != false, after.selection?.isEmpty != false,
               let previous = before.before else { return }
-        let ownsSuffix = owned && !active.isEmpty && expectedAnchor.map {
-            previous.unicodeScalars.elementsEqual(($0 + active.text).unicodeScalars)
-        } == true
+        let ownsSuffix = owned && !active.isEmpty && expectedAnchor != nil && endsWith(previous, active.text)
         let deletedAtStart = ownsSuffix && expectedAnchor == "" && after.after?.isEmpty == false
         let left = after.before ?? (!host.hasText || deletedAtStart ? "" : nil)
         if ownsSuffix, let left, let removed = BurmeseDeletion.removedSuffix(before: previous, after: left) {
@@ -363,7 +396,7 @@ struct BurmeseHostEditor {
         var survivor = active
         survivor.backspace()
         guard !survivor.isEmpty, let finalLeft = host.context.before,
-              finalLeft.unicodeScalars.elementsEqual((anchor + survivor.text).unicodeScalars) else { return }
+              endsWith(finalLeft, survivor.text) else { return }
         pending = survivor
         plainAnchor = anchor
         owner = host.context

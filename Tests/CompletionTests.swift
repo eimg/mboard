@@ -3,6 +3,19 @@ import XCTest
 @testable import MBoardCore
 
 final class CompletionTests: XCTestCase {
+    func testBurmeseSuggestionsRespectTextOnBothSidesOfCaret() {
+        func titles(after right: String) -> [String] {
+            Completions.matches(before: "သူကျော", after: right, language: .burmese).map(\.title)
+        }
+        XCTAssertTrue(titles(after: "င်း").isEmpty)
+        XCTAssertTrue(titles(after: "င်းတက်").isEmpty)
+        XCTAssertFalse(titles(after: "သား").contains("ကျောင်းသား"))
+        XCTAssertTrue(titles(after: "်း").isEmpty)
+        for right in ["", " ", "တက်", "ငယ်", "သား"] {
+            XCTAssertTrue(titles(after: right).contains("ကျောင်း"), right)
+        }
+    }
+
     func testEnglishSourcesPreservePrefixAndMergeWithoutDuplicates() {
         let results = Completions.matches(before: "say he", language: .english,
                                          apple: ["he", "hey", "HEY", "he's", "her"])

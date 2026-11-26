@@ -32,6 +32,8 @@ enum Completions {
     နောက်မှပြောမယ် တွေ့ရတာဝမ်းသာပါတယ် ကိစ္စမရှိပါဘူး အရမ်းကောင်းတယ်
     """.split(whereSeparator: \.isWhitespace).map(String.init)
 
+    private static let conversationalWords = Set(conversational)
+
     static func continuesEnglishWord(_ after: String?) -> Bool {
         guard let next = after?.unicodeScalars.first else { return false }
         return (CharacterSet.letters.contains(next) && next.properties.name?.hasPrefix("LATIN ") == true)
@@ -59,9 +61,36 @@ enum Completions {
         }
     }
 
-    static func matches(before: String, language: Language, apple: [String] = [],
+    private static func insideBurmeseWord(_ prefixes: [String], after right: String?, learned: [String]) -> Bool {
+        guard let right, let first = right.unicodeScalars.first else { return false }
+        if (0x102B...0x103E).contains(first.value) { return true }
+        guard (0x1000...0x102A).contains(first.value) || first.value == 0x103F else { return false }
+        let continuation = right.unicodeScalars.prefix(48).prefix { (0x1000...0x103F).contains($0.value) }
+        let endings = String(continuation)
+        let savedWords = Set(learned)
+        for prefix in prefixes {
+            var word = prefix
+            for character in endings {
+                word.append(character)
+                if conversationalWords.contains(word) || savedWords.contains(word) || BurmeseWordList.shared.contains(word) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private static func overlapsBurmeseContinuation(_ suffix: String, after right: String?) -> Bool {
+        guard let right, !right.isEmpty else { return false }
+        if suffix.first == right.first { return true }
+        // A longer candidate can also end with the next word in unspaced text.
+        return suffix.indices.contains { right.unicodeScalars.starts(with: suffix[$0...].unicodeScalars) }
+    }
+
+    static func matches(before: String, after: String? = nil, language: Language, apple: [String] = [],
                         learned: [String] = [], allCaps: Bool = false) -> [Completion] {
         let prefixes = language == .english ? [englishPrefix(in: before)] : burmesePrefixes(in: before)
+        if language == .burmese, insideBurmeseWord(prefixes, after: after, learned: learned) { return [] }
         for prefix in prefixes where !prefix.isEmpty {
             let needle = key(prefix)
             var result = [Completion]()
@@ -83,6 +112,7 @@ enum Completions {
                         ?? String(rest).lowercased()
                 }
                 else { suffix = String(rest) }
+                if language == .burmese, overlapsBurmeseContinuation(suffix, after: after) { return }
                 result.append(Completion(title: prefix + suffix, suffix: suffix, learned: learned))
             }
 
@@ -122,17 +152,27 @@ private struct BurmeseWordList {
         words = Array(data).split(separator: 10)
     }
 
-    func matches(_ prefix: String) -> [String] {
+    private func lowerBound(_ needle: String.UTF8View) -> Int {
         // The bundled lines are sorted by UTF-8. Search by bytes so a partial
         // Myanmar grapheme can match its continuation without scanning the list.
-        let needle = prefix.utf8
         var low = 0, high = words.count
         while low < high {
             let mid = low + (high - low) / 2
             if words[mid].lexicographicallyPrecedes(needle) { low = mid + 1 }
             else { high = mid }
         }
-        return words[low...].prefix(4).prefix(while: { $0.starts(with: needle) })
+        return low
+    }
+
+    func contains(_ word: String) -> Bool {
+        let bytes = word.utf8
+        let index = lowerBound(bytes)
+        return index < words.count && words[index].elementsEqual(bytes)
+    }
+
+    func matches(_ prefix: String) -> [String] {
+        let needle = prefix.utf8
+        return words[lowerBound(needle)...].prefix(4).prefix(while: { $0.starts(with: needle) })
             .map { String(decoding: $0, as: UTF8.self) }
     }
 }

@@ -12,6 +12,8 @@ private final class EditingHost: BurmeseEditHost {
     var limit = 100
     var deletesScalar = false
     var hidesLeft = false
+    var excludesMark = false
+    var rejectedInput: String?
     var hidesLeftAfterDeletion = false
     private(set) var deletions = 0
 
@@ -23,7 +25,7 @@ private final class EditingHost: BurmeseEditHost {
     var text: String { left + (selected ?? marked ?? "") + right }
     var hasText: Bool { !text.isEmpty }
     var context: HostContext {
-        HostContext(document: document, before: hidesLeft ? nil : String((left + (marked ?? "")).suffix(limit)),
+        HostContext(document: document, before: hidesLeft ? nil : String((left + (excludesMark ? "" : (marked ?? ""))).suffix(limit)),
                     after: String(right.prefix(limit)), selection: marked == nil ? selected : nil)
     }
 
@@ -38,7 +40,13 @@ private final class EditingHost: BurmeseEditHost {
     func insert(_ text: String) {
         marked = nil
         selected = nil
-        left += text
+        if text != rejectedInput { left += text }
+    }
+    func moveCaret(byUTF16 offset: Int) {
+        let text = (left + right) as NSString
+        let position = min(max(0, left.utf16.count + offset), text.length)
+        left = text.substring(to: position)
+        right = text.substring(from: position)
     }
     func deleteBackward() {
         deletions += 1
@@ -52,6 +60,90 @@ private final class EditingHost: BurmeseEditHost {
 }
 
 final class HostEditingTests: XCTestCase {
+    @MainActor func testVowelOrdersWithSlidingAndDisappearingContext() async {
+        let prefix = String(repeating: "paragraph ", count: 44)
+        for excludesMark in [false, true] {
+            for limit in [2, 64, 1000] {
+                for scalarDeletion in [false, true] {
+                    for taps in [["က", "ု", "ိ"], ["က", "ိ", "ု"]] {
+                        let host = EditingHost(prefix, right: " end")
+                        host.limit = limit
+                        host.excludesMark = excludesMark
+                        host.deletesScalar = scalarDeletion
+                        host.hidesLeftAfterDeletion = true
+                        var editor = BurmeseHostEditor()
+                        for tap in taps { editor.type(tap, in: host) }
+                        editor.finish(in: host)
+                        XCTAssertEqual(host.left.unicodeScalars.map(\.value), (prefix + "ကို").unicodeScalars.map(\.value))
+                        XCTAssertEqual(host.right, " end")
+                        XCTAssertEqual(host.deletions, 0)
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor func testRepeatedContextUpdatesAtTheSameCaret() async {
+        let prefix = String(repeating: "paragraph ", count: 44)
+        let host = EditingHost(prefix)
+        host.excludesMark = true
+        var editor = BurmeseHostEditor()
+        editor.type("က", in: host)
+        editor.type("ု", in: host)
+        for width in [64, 64, 96, 32] {
+            host.limit = width
+            editor.check(host.context, in: host)
+        }
+        editor.type("ိ", in: host)
+        XCTAssertEqual(host.left, prefix + "ကို")
+    }
+
+    @MainActor func testReplacementInAFieldThatFiltersZeroWidthSpace() async {
+        let host = EditingHost("A ", right: " end")
+        host.rejectedInput = "\u{200B}"
+        var editor = BurmeseHostEditor()
+        for tap in ["က", "ိ", "ု", "ီ"] { editor.type(tap, in: host) }
+        XCTAssertEqual(host.text, "A ကိုီ end")
+        XCTAssertEqual(host.deletions, 0)
+    }
+
+    @MainActor func testDeclinedReplacementKeepsExistingText() async {
+        let host = EditingHost("A ", right: " end")
+        var editor = BurmeseHostEditor()
+        editor.type("စ", in: host)
+        host.rejectedInput = "ဈ"
+        editor.type("ျ", in: host)
+        XCTAssertEqual(host.left, "A စ")
+        XCTAssertEqual(host.right, " end")
+    }
+
+    @MainActor func testReplacingAnOwnedVowelWhenDeletionHidesLeftContext() async {
+        for scalarDeletion in [false, true] {
+            let host = EditingHost("A 👩🏽‍💻 ", right: " end")
+            host.deletesScalar = scalarDeletion
+            host.hidesLeftAfterDeletion = true
+            var editor = BurmeseHostEditor()
+            for tap in ["က", "ိ", "ု", "ီ"] { editor.type(tap, in: host) }
+            editor.finish(in: host)
+            XCTAssertEqual(host.text, "A 👩🏽‍💻 ကီု end")
+            XCTAssertEqual(host.right, " end")
+        }
+    }
+
+    @MainActor func testDeleteCommittedPlaceholderPreservesNeighbor() async {
+        for prefix in ["A", "A ", "👩🏽‍💻"] {
+            for scalarDeletion in [false, true] {
+                let host = EditingHost(prefix + "\u{200C}ေ", right: " end")
+                host.deletesScalar = scalarDeletion
+                var editor = BurmeseHostEditor()
+                editor.backspace(in: host)
+                XCTAssertEqual(host.text, prefix + "\u{200C} end")
+                editor.backspace(in: host)
+                XCTAssertEqual(host.text, prefix + " end")
+            }
+        }
+    }
+
     @MainActor func testRecordedGboardTapsThroughHostEditor() async throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "GboardBurmese", withExtension: "tsv"))
         let cases = try String(contentsOf: url, encoding: .utf8).split(separator: "\n").filter { !$0.hasPrefix("#") }
@@ -157,9 +249,10 @@ final class HostEditingTests: XCTestCase {
         editor.type("က", in: host)
         if host.marked == nil { host.left = "x" } // Move the selected range out of the left context.
         host.selected = "ကေ"
+        let priorDeletions = host.deletions
         editor.backspace(in: host)
         XCTAssertEqual(host.text, "xz")
-        XCTAssertEqual(host.deletions, 1)
+        XCTAssertEqual(host.deletions - priorDeletions, 1)
     }
 
     @MainActor func testExternalEditAndDocumentSwitchDiscardOwnership() async {
