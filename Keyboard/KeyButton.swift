@@ -31,7 +31,8 @@ final class KeyButton: UIButton {
         layer.shadowRadius = 0.5
         tintColor = KeyColors.ink
         setTitleColor(KeyColors.ink, for: .normal)
-        titleLabel?.font = .systemFont(ofSize: modifier ? 16 : 23)
+        let fontSize: CGFloat = modifier ? 16 : 23
+        titleLabel?.font = Self.labelFont(for: title, size: fontSize)
         titleLabel?.adjustsFontSizeToFitWidth = true
         titleLabel?.minimumScaleFactor = 0.5
         titleLabel?.lineBreakMode = .byClipping
@@ -63,9 +64,69 @@ final class KeyButton: UIButton {
     }
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
 
+    static func labelFont(for text: String, size: CGFloat) -> UIFont {
+        // Look at the glyphs so mixed symbol pages keep their Latin sizing.
+        let isMyanmar = text.unicodeScalars.contains { (0x1000...0x109F).contains($0.value) }
+        return .systemFont(ofSize: isMyanmar ? (size * 0.83).rounded() : size)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+    }
+}
+
+final class KeyPreview: UILabel {
+    private weak var source: KeyButton?
+
+    init() {
+        super.init(frame: .zero)
+        isAccessibilityElement = false
+        isUserInteractionEnabled = false
+        textAlignment = .center
+        textColor = KeyColors.ink
+        adjustsFontSizeToFitWidth = true
+        minimumScaleFactor = 0.6
+        layer.cornerRadius = 9
+        layer.cornerCurve = .continuous
+        layer.shadowOpacity = 0.23
+        layer.shadowRadius = 2
+        layer.shadowOffset = CGSize(width: 0, height: 1)
+        clipsToBounds = false
+    }
+
+    required init?(coder: NSCoder) { fatalError("Programmatic view") }
+
+    func show(for key: KeyButton, in board: UIView) {
+        guard let title = key.currentTitle else { return }
+        let keyFrame = key.convert(key.bounds, to: board)
+        let width = min(board.bounds.width - 4, max(51, keyFrame.width + 14))
+        let height: CGFloat = min(48, keyFrame.height + 6)
+        let x = min(max(2, keyFrame.midX - width / 2), board.bounds.width - width - 2)
+        layer.removeAllAnimations()
+        frame = CGRect(x: x, y: max(2, keyFrame.minY - height - 2), width: width, height: height)
+        text = title
+        font = KeyButton.labelFont(for: title, size: 31)
+        layer.backgroundColor = KeyColors.letter.resolvedColor(with: board.traitCollection).cgColor
+        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+        alpha = 1
+        board.addSubview(self)
+        source = key
+    }
+
+    func release(_ key: KeyButton) {
+        guard source === key else { return }
+        source = nil
+        if UIAccessibility.isReduceMotionEnabled { dismiss(); return }
+        UIView.animate(withDuration: 0.09, animations: { self.alpha = 0 }) { finished in
+            if finished && self.source == nil { self.removeFromSuperview() }
+        }
+    }
+
+    func dismiss() {
+        source = nil
+        layer.removeAllAnimations()
+        removeFromSuperview()
     }
 }
 
@@ -104,7 +165,7 @@ final class AlternateMenu: UIView {
             let label = UILabel(frame: CGRect(x: 4 + CGFloat(i % columns) * cellWidth, y: 4 + CGFloat(i / columns) * 36, width: cellWidth, height: 36))
             label.text = LetterKey.label(for: text)
             label.textAlignment = .center
-            label.font = .systemFont(ofSize: 20)
+            label.font = KeyButton.labelFont(for: text, size: 20)
             label.adjustsFontSizeToFitWidth = true
             label.minimumScaleFactor = 0.5
             label.layer.cornerRadius = 9

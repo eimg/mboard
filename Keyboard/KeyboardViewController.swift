@@ -66,6 +66,7 @@ final class KeyboardViewController: UIInputViewController {
     private var letterKeys = [ObjectIdentifier: LetterKey]()
     private var emojiPicker: EmojiPicker?
     private var recentEmoji = [EmojiItem]()
+    private let keyPreview = KeyPreview()
     private var popup: AlternateMenu?
     private var repeatingDelete: Timer?
     private var lookup: Task<Void, Never>?
@@ -261,6 +262,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func cancelGestures() {
+        keyPreview.dismiss()
         repeatingDelete?.invalidate()
         repeatingDelete = nil
         popup?.removeFromSuperview()
@@ -276,6 +278,8 @@ final class KeyboardViewController: UIInputViewController {
     private func letterButton(_ letter: LetterKey) -> KeyButton {
         let button = KeyButton(title: LetterKey.label(for: letter.text), hint: letter.hint)
         button.accessibilityIdentifier = "key." + letter.text
+        button.addTarget(self, action: #selector(showPreview(_:)), for: [.touchDown, .touchDragEnter])
+        button.addTarget(self, action: #selector(releasePreview(_:)), for: [.touchDragExit, .touchUpInside, .touchUpOutside, .touchCancel])
         button.addAction(UIAction { [weak self] _ in self?.insert(letter.text) }, for: .touchUpInside)
         if !letter.alternatives.isEmpty {
             letterKeys[ObjectIdentifier(button)] = letter
@@ -287,6 +291,15 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         return button
+    }
+
+    @objc private func showPreview(_ key: KeyButton) {
+        guard popup == nil else { return }
+        keyPreview.show(for: key, in: board)
+    }
+
+    @objc private func releasePreview(_ key: KeyButton) {
+        keyPreview.release(key)
     }
 
     @objc private func holdLetter(_ gesture: UILongPressGestureRecognizer) {
