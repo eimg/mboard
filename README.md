@@ -4,6 +4,12 @@
 
 MBoard is an offline English and Burmese (မြန်မာ) keyboard for iPhone and iPad. You can switch languages without leaving the keyboard, complete a Burmese word in the middle of an unspaced sentence, and search emoji in either language.
 
+<p>
+  <img src="docs/images/iphone/01-burmese-light.png" alt="Burmese keyboard in light mode on iPhone" width="31%">
+  <img src="docs/images/iphone/02-burmese-dark.png" alt="Burmese keyboard in dark mode on iPhone" width="31%">
+  <img src="docs/images/iphone/03-emoji.png" alt="MBoard emoji picker on iPhone" width="31%">
+</p>
+
 **Release status** · Version 0.1 is in development. You can build the app from source for iPhone or iPad running iOS or iPadOS 16 or later, or try it in the simulator.
 
 ## Build from source
