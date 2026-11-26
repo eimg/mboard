@@ -1,6 +1,6 @@
 # App Store submission preparation
 
-Prepared November 26, 2026 for MBoard 0.1 (build 4). The iPhone and iPad app has bundle ID `com.eimg.mboard` and embeds `com.eimg.mboard.keyboard`. Minimum OS is 16.0. This document is a draft for the account holder.
+Prepared November 26, 2026 for MBoard 0.1 (build 9). The iPhone and iPad app has bundle ID `com.eimg.mboard` and embeds `com.eimg.mboard.keyboard`. Minimum OS is 16.0. This document is a draft for the account holder.
 
 ## Product page · English (U.S.)
 
@@ -42,10 +42,10 @@ Use the local, Git-ignored `screenshots/` directory. Use full-resolution opaque 
 | Local folder | Device and slot | Portrait pixels | Contents |
 | --- | --- | --- | --- |
 | `screenshots/iphone/iphone-*.png` | iPhone 17 Pro, medium Dynamic Island | 1206 × 2622 | Burmese typing, English typing, emoji |
-| `screenshots/iphone/max-*.png` | iPhone 17 Pro Max, large Dynamic Island | 1320 × 2868 | Burmese typing, English typing, emoji |
+| `screenshots/iphone/max-*.png` | iPhone 17 Pro Max, large Dynamic Island (optional) | 1320 × 2868 | Older build 4 captures. Omit from the build 9 upload unless refreshed. |
 | `screenshots/ipad/` | iPad Pro 13-inch (M5) | 2064 × 2752 | Burmese typing, English typing, emoji |
 
-The images show the installed extension in the practice app. On the 13-inch iPad simulator, input checks produced `ကျောင်း`, then `ကျောင်း school`, then `ကျောင်း school😀`. The medium iPhone simulator also produced the bilingual text. Both targets in the local unsigned device archive declare iPhone and iPad compatibility and contain their privacy manifests.
+The medium iPhone and 13-inch iPad screenshots show build 9 of the installed extension in the practice app. On the 13-inch iPad simulator, input checks produced `ကျောင်း`, then `ကျောင်း school`, then `ကျောင်း school😀`. The medium iPhone simulator also produced the bilingual text. The support and privacy URLs returned HTTP 200 without credentials on November 26, 2026. Both targets in the local unsigned build 9 device archive declare iPhone and iPad compatibility and contain their privacy manifests.
 
 ## Before the eventual upload
 

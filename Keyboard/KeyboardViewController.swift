@@ -1,16 +1,12 @@
 import UIKit
 
-private struct HostContext: Equatable {
+private extension HostContext {
     // UIKit can return nil while connecting or tearing down the extension,
     // although the SDK imports the getter as a nonoptional Swift UUID.
     static func identifier(_ proxy: UITextDocumentProxy) -> UUID? {
         (proxy as? NSObject)?.value(forKey: #keyPath(UITextDocumentProxy.documentIdentifier)) as? UUID
     }
 
-    let document: UUID?
-    let before: String?
-    let after: String?
-    let selection: String?
 
     init(_ proxy: UITextDocumentProxy) {
         document = Self.identifier(proxy)
@@ -18,6 +14,19 @@ private struct HostContext: Equatable {
         after = proxy.documentContextAfterInput
         selection = proxy.selectedText
     }
+}
+
+@MainActor
+private struct ProxyEditHost: BurmeseEditHost {
+    let proxy: UITextDocumentProxy
+    var context: HostContext { HostContext(proxy) }
+    var hasText: Bool { proxy.hasText }
+    func insert(_ text: String) { proxy.insertText(text) }
+    func mark(_ text: String) {
+        proxy.setMarkedText(text, selectedRange: NSRange(location: text.utf16.count, length: 0))
+    }
+    func unmark() { proxy.unmarkText() }
+    func deleteBackward() { proxy.deleteBackward() }
 }
 
 @MainActor
@@ -63,9 +72,10 @@ final class KeyboardViewController: UIInputViewController {
     private var manualShiftContext: HostContext?
     private var shift = false
     private var symbolPage: Int?
-    private var composition = BurmeseComposition()
-    private var compositionContext: HostContext?
-    private var letterKeys = [ObjectIdentifier: LetterKey]()
+    private var editor = BurmeseHostEditor()
+    private var editHost: ProxyEditHost { ProxyEditHost(proxy: textDocumentProxy) }
+    private var englishLetters = [KeyButton]()
+    private weak var englishShiftButton: KeyButton?
     private var emojiPicker: EmojiPicker?
     private var recentEmoji = [EmojiItem]()
     private let keyPopup = KeyPopup()
@@ -263,7 +273,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateEnglishShift() {
         guard isViewLoaded, language == .english, symbolPage == nil, repeatingDelete == nil else { return }
         let wanted = englishShift(for: HostContext(textDocumentProxy))
-        if shift != wanted { shift = wanted; rebuild() }
+        if shift != wanted { shift = wanted; refreshEnglishCase() }
     }
 
     private func switchLanguage() {
@@ -293,20 +303,40 @@ final class KeyboardViewController: UIInputViewController {
 
     private func letterButton(_ letter: LetterKey) -> KeyButton {
         let button = KeyButton(title: LetterKey.label(for: letter.text), hint: letter.hint)
-        button.accessibilityIdentifier = "key." + letter.text
+        configureLetter(button, letter)
         button.addTarget(self, action: #selector(showPreview(_:)), for: [.touchDown, .touchDragEnter])
         button.addTarget(self, action: #selector(releasePreview(_:)), for: [.touchDragExit, .touchUpInside, .touchUpOutside, .touchCancel])
-        button.addAction(UIAction { [weak self] _ in self?.insert(letter.text) }, for: .touchUpInside)
+        button.addTarget(self, action: #selector(tapLetter(_:)), for: .touchUpInside)
         if !letter.alternatives.isEmpty {
-            letterKeys[ObjectIdentifier(button)] = letter
             let hold = UILongPressGestureRecognizer(target: self, action: #selector(holdLetter(_:)))
             hold.minimumPressDuration = 0.35
             button.addGestureRecognizer(hold)
-            button.accessibilityCustomActions = letter.alternatives.map { value in
-                UIAccessibilityCustomAction(name: LetterKey.label(for: value)) { [weak self] _ in self?.insert(value); return true }
-            }
         }
         return button
+    }
+
+    private func configureLetter(_ button: KeyButton, _ letter: LetterKey) {
+        button.letter = letter
+        let label = LetterKey.label(for: letter.text)
+        if button.currentTitle != label { button.setTitle(label, for: .normal) }
+        button.accessibilityLabel = label
+        button.accessibilityIdentifier = "key." + letter.text
+        button.accessibilityCustomActions = letter.alternatives.map { value in
+            UIAccessibilityCustomAction(name: LetterKey.label(for: value)) { [weak self] _ in self?.insert(value); return true }
+        }
+    }
+
+    @objc private func tapLetter(_ button: KeyButton) {
+        if let letter = button.letter { insert(letter.text) }
+    }
+
+    private func refreshEnglishCase() {
+        guard let englishShiftButton else { rebuild(); return }
+        keyPopup.dismiss()
+        let letters = KeyboardLayout.letters(.english, shift: shift).joined()
+        for (button, letter) in zip(englishLetters, letters) { configureLetter(button, letter) }
+        englishShiftButton.setImage(UIImage(systemName: shift ? "shift.fill" : "shift"), for: .normal)
+        englishShiftButton.accessibilityValue = shift ? "On" : "Off"
     }
 
     @objc private func showPreview(_ key: KeyButton) {
@@ -319,7 +349,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func holdLetter(_ gesture: UILongPressGestureRecognizer) {
-        guard let key = gesture.view as? KeyButton, let letter = letterKeys[ObjectIdentifier(key)] else { return }
+        guard let key = gesture.view as? KeyButton, let letter = key.letter else { return }
         let point = gesture.location(in: board)
         switch gesture.state {
         case .began:
@@ -361,7 +391,8 @@ final class KeyboardViewController: UIInputViewController {
 
     private func rebuild() {
         cancelGestures()
-        letterKeys.removeAll(keepingCapacity: true)
+        englishLetters.removeAll(keepingCapacity: true)
+        englishShiftButton = nil
         previousSwitchRequirement = needsInputModeSwitchKey
         currentReturnKey = textDocumentProxy.returnKeyType
         rows.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -371,6 +402,7 @@ final class KeyboardViewController: UIInputViewController {
             ?? KeyboardLayout.letters(language, shift: shift)
         for (i, letters) in letterRows.enumerated() {
             var buttons = letters.map(letterButton)
+            if language == .english && symbolPage == nil { englishLetters.append(contentsOf: buttons) }
             if i == letterRows.count - 1 {
                 let toggle: KeyButton
                 if let page = symbolPage {
@@ -382,9 +414,12 @@ final class KeyboardViewController: UIInputViewController {
                     toggle = command("Shift", symbol: shift ? "shift.fill" : "shift") { [weak self] in
                         guard let self else { return }
                         shift.toggle()
-                        if language == .english { manualShiftContext = HostContext(textDocumentProxy) }
-                        rebuild()
+                        if language == .english {
+                            manualShiftContext = HostContext(textDocumentProxy)
+                            refreshEnglishCase()
+                        } else { rebuild() }
                     }
+                    if language == .english { englishShiftButton = toggle }
                     toggle.accessibilityValue = shift ? "On" : "Off"
                 }
                 buttons.insert(toggle, at: 0)
@@ -466,6 +501,7 @@ final class KeyboardViewController: UIInputViewController {
         bottom.isActive = true
         pickerBottom = bottom
         emojiPicker = picker
+        updateSuggestions()
         keyArea.isHidden = true
     }
 
@@ -507,12 +543,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func finishComposition() {
-        composition = BurmeseComposition()
-        compositionContext = nil
-    }
-
-    private func checkComposition(_ context: HostContext) {
-        if compositionContext != context { finishComposition() }
+        editor.finish(in: editHost)
     }
 
     private func insert(_ value: String) {
@@ -526,62 +557,8 @@ final class KeyboardViewController: UIInputViewController {
             insertLiteral(value)
             return
         }
-        let proxy = textDocumentProxy
-        let context = HostContext(proxy)
-        checkComposition(context)
-        if composition.startsNewSegment(value) { finishComposition() }
-        let previous = composition.text
-        composition.append(value)
-        let change = BurmeseComposition.edit(from: previous, to: composition.text)
-        // Most keys append directly. Reordering a prebase vowel replaces only the
-        // verified suffix of our last segment. Keep the host's selection unmarked.
-        var replacement = change.insert
-        if !change.remove.isEmpty {
-            guard let prefix = removeCompositionSuffix(change.remove, from: context) else {
-                finishComposition()
-                let current = HostContext(proxy)
-                if context.document == current.document, context.after == current.after,
-                   current.selection?.isEmpty != false { proxy.insertText(value) }
-                didType()
-                return
-            }
-            replacement = prefix + replacement
-        }
-        proxy.insertText(replacement)
-        trackComposition(after: context)
+        editor.type(value, in: editHost)
         didType()
-    }
-
-    private func trackComposition(after previous: HostContext) {
-        let current = HostContext(textDocumentProxy)
-        let segment = composition.text.unicodeScalars
-        if !segment.isEmpty, current.document != nil, previous.document == current.document,
-           current.selection?.isEmpty != false, current.before?.unicodeScalars.suffix(segment.count).elementsEqual(segment) == true {
-            compositionContext = current
-        } else { finishComposition() }
-    }
-
-    /// A host may erase a scalar or a whole grapheme. Return any verified
-    /// overshoot so it can be restored together with the newly composed text.
-    private func removeCompositionSuffix(_ suffix: String, from context: HostContext) -> String? {
-        guard context.document != nil, context.selection?.isEmpty != false, var before = context.before,
-              before.unicodeScalars.suffix(suffix.unicodeScalars.count).elementsEqual(suffix.unicodeScalars)
-        else { return nil }
-        var remaining = suffix.unicodeScalars.count
-        let proxy = textDocumentProxy
-        while remaining > 0 {
-            proxy.deleteBackward()
-            let next = HostContext(proxy)
-            guard next.document == context.document, next.after == context.after, next.selection?.isEmpty != false,
-                  let removed = BurmeseDeletion.removedSuffix(before: before, after: next.before ?? "")
-            else { return nil }
-            if removed.unicodeScalars.count >= remaining {
-                return String(removed.unicodeScalars.dropLast(remaining))
-            }
-            remaining -= removed.unicodeScalars.count
-            before = next.before ?? ""
-        }
-        return ""
     }
 
     private func insertLiteral(_ value: String) {
@@ -619,39 +596,26 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func deleteFromHost() {
-        let proxy = textDocumentProxy
-        let context = HostContext(proxy)
         manualShiftContext = nil
-        checkComposition(context)
-        // One host deletion owns the entire selection, including mixed-script
-        // selections. Scalar restoration applies only at a collapsed caret.
-        proxy.deleteBackward()
-        let result = HostContext(proxy)
-        if context.selection?.isEmpty != false, result.selection?.isEmpty != false, context.document != nil,
-           context.document == result.document, context.after == result.after, let before = context.before {
-            if !composition.isEmpty {
-                if let removed = BurmeseDeletion.removedSuffix(before: before, after: result.before ?? ""),
-                   removed.unicodeScalars.count > 1 {
-                    proxy.insertText(String(removed.unicodeScalars.dropLast()))
-                }
-                composition.backspace()
-                trackComposition(after: context)
-            } else if let restore = BurmeseDeletion.retainedScalars(before: before, afterHostDelete: result.before ?? "") {
-                proxy.insertText(restore)
-            }
-        } else { finishComposition() }
+        editor.backspace(in: editHost)
         updateEnglishShift()
         updateSuggestions()
+    }
+
+    private var suggestionContext: HostContext {
+        editor.contextForSuggestions(HostContext(textDocumentProxy))
     }
 
     private func updateSuggestions() {
         lookup?.cancel()
         candidates.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard wordSuggestions, emojiPicker == nil else { return }
-        let context = HostContext(textDocumentProxy)
+        let context = suggestionContext
         guard context.document != nil, context.selection?.isEmpty != false else { return }
         guard let before = context.before, !before.isEmpty else { return }
         let mode = language
+        guard mode != .english || !Completions.continuesEnglishWord(context.after) else { return }
+        let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
         lookup = Task { [weak self] in
             // UIKit isolates UITextChecker to the main actor. Wait for a pause
             // before asking it, and never call it from the key's insertion action.
@@ -662,20 +626,22 @@ final class KeyboardViewController: UIInputViewController {
             guard !Task.isCancelled, let self else { return }
             let apple = mode == .english ? englishCompletions.words(for: Completions.englishPrefix(in: recent)) : []
             let results = await Task.detached(priority: .utility) {
-                Completions.matches(before: recent, language: mode, apple: apple, learned: learned)
+                Completions.matches(before: recent, language: mode, apple: apple, learned: learned, allCaps: allCaps)
             }.value
             guard !Task.isCancelled, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
-                  HostContext(self.textDocumentProxy) == context else { return }
+                  self.suggestionContext == context else { return }
             for candidate in results {
                 let button = UIButton(type: .system)
+                button.accessibilityIdentifier = "completion." + candidate.title
                 button.setTitle(candidate.title, for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 14)
                 button.titleLabel?.adjustsFontSizeToFitWidth = true
                 button.tintColor = KeyColors.ink
                 button.addAction(UIAction { [weak self] _ in
-                    guard let self, self.language == mode, HostContext(self.textDocumentProxy) == context else { return }
+                    guard let self, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
+                          self.suggestionContext == context else { return }
                     LearnedWordStore.shared.record(candidate.title, language: mode)
-                    self.insertLiteral(candidate.suffix)
+                    self.insertHostText(candidate.suffix)
                 }, for: .touchUpInside)
                 if candidate.learned {
                     let forget = UIAction(title: "Forget This Suggestion", attributes: .destructive) { [weak self] _ in
@@ -690,13 +656,13 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {
-        checkComposition(HostContext(textDocumentProxy))
+        editor.check(HostContext(textDocumentProxy), in: editHost)
         updateEnglishShift()
         updateSuggestions()
     }
     override func textDidChange(_ textInput: UITextInput?) {
         guard isViewLoaded else { return }
-        checkComposition(HostContext(textDocumentProxy))
+        editor.check(HostContext(textDocumentProxy), in: editHost)
         configureAppearance()
         updateEnglishShift()
         if currentReturnKey != textDocumentProxy.returnKeyType { rebuild() }

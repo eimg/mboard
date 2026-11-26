@@ -15,6 +15,7 @@ enum KeyColors {
 }
 
 final class KeyButton: UIButton {
+    var letter: LetterKey?
     var fill: UIColor = KeyColors.letter { didSet { updateFill() } }
     override var isHighlighted: Bool { didSet { updateFill() } }
     private func updateFill() {

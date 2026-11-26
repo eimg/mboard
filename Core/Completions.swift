@@ -32,6 +32,12 @@ enum Completions {
     နောက်မှပြောမယ် တွေ့ရတာဝမ်းသာပါတယ် ကိစ္စမရှိပါဘူး အရမ်းကောင်းတယ်
     """.split(whereSeparator: \.isWhitespace).map(String.init)
 
+    static func continuesEnglishWord(_ after: String?) -> Bool {
+        guard let next = after?.unicodeScalars.first else { return false }
+        return (CharacterSet.letters.contains(next) && next.properties.name?.hasPrefix("LATIN ") == true)
+            || next == "'" || next == "’"
+    }
+
     static func englishPrefix(in text: String) -> String {
         let tail = text.unicodeScalars.reversed().prefix {
             (65...90).contains($0.value) || (97...122).contains($0.value) || $0 == "'" || $0 == "’"
@@ -54,7 +60,7 @@ enum Completions {
     }
 
     static func matches(before: String, language: Language, apple: [String] = [],
-                        learned: [String] = []) -> [Completion] {
+                        learned: [String] = [], allCaps: Bool = false) -> [Completion] {
         let prefixes = language == .english ? [englishPrefix(in: before)] : burmesePrefixes(in: before)
         for prefix in prefixes where !prefix.isEmpty {
             let needle = key(prefix)
@@ -66,8 +72,17 @@ enum Completions {
                 guard normalized.utf8.starts(with: needle.utf8), normalized != needle,
                       seen.insert(normalized).inserted else { return }
                 let rest = word.unicodeScalars.dropFirst(prefix.unicodeScalars.count)
-                let caps = language == .english && prefix.filter(\.isLetter).count > 1 && prefix == prefix.uppercased()
-                let suffix = caps ? String(rest).uppercased() : String(rest)
+                let caps = language == .english && (allCaps || (prefix.filter(\.isLetter).count > 1 && prefix == prefix.uppercased()))
+                let suffix: String
+                if caps { suffix = String(rest).uppercased() }
+                else if learned && language == .english {
+                    // A previous tap may have been in an all-caps field. Use
+                    // dictionary spelling for names such as iPhone when available.
+                    let spelling = apple.first { key($0) == normalized && $0 != $0.uppercased() }
+                    suffix = spelling.map { String($0.unicodeScalars.dropFirst(prefix.unicodeScalars.count)) }
+                        ?? String(rest).lowercased()
+                }
+                else { suffix = String(rest) }
                 result.append(Completion(title: prefix + suffix, suffix: suffix, learned: learned))
             }
 

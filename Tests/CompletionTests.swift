@@ -15,6 +15,17 @@ final class CompletionTests: XCTestCase {
         XCTAssertTrue(Completions.matches(before: "‘", language: .english).isEmpty)
     }
 
+    func testEnglishCaretBoundariesAndLearnedCase() {
+        for right in ["llo", "'t", "’ll", "é"] { XCTAssertTrue(Completions.continuesEnglishWord(right)) }
+        for right in ["", " ", ".", "ကျောင်း"] { XCTAssertFalse(Completions.continuesEnglishWord(right)) }
+        for (prefix, expected) in [("he", "hello"), ("He", "Hello"), ("HE", "HELLO")] {
+            XCTAssertEqual(Completions.matches(before: prefix, language: .english, learned: ["HELLO"]).first?.title, expected)
+        }
+        XCTAssertEqual(Completions.matches(before: "iP", language: .english, apple: ["iPhone"],
+                                           learned: ["IPHONE"]).first?.title, "iPhone")
+        XCTAssertEqual(Completions.matches(before: "H", language: .english, learned: ["hello"], allCaps: true).first?.title, "HELLO")
+    }
+
     func testBundledICUAndConversationalBurmese() {
         XCTAssertTrue(Completions.matches(before: "ကီလိုဂရ", language: .burmese).contains(Completion(title: "ကီလိုဂရမ်", suffix: "မ်")))
         let phrases = Completions.matches(before: "အဆင်ပြေ", language: .burmese)

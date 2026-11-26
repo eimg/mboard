@@ -30,6 +30,33 @@ final class CoreTests: XCTestCase {
         core.backspace()
         XCTAssertTrue(core.isEmpty)
     }
+
+    func testMyanSanCombiningOrdersProduceIdenticalScalars() {
+        for marks in [["ိ","ု","့"], ["ိ","့","ု"], ["ု","ိ","့"],
+                      ["ု","့","ိ"], ["့","ိ","ု"], ["့","ု","ိ"]] {
+            XCTAssertEqual(run(["က"] + marks), [0x1000,0x102D,0x102F,0x1037])
+        }
+        for (keys, word) in [
+            (["က","ိ","ု"], "ကို"), (["က","ု","ိ"], "ကို"),
+            (["ခ","ြ","ံ","ု"], "ခြုံ"), (["ခ","ြ","ုံ"], "ခြုံ"),
+            (["ေ","က","ွ","ြ","း"], "ကြွေး"), (["ေ","က","ြ","ွ","း"], "ကြွေး"),
+            (["ပ","ု","ေ","ဏ","္","ဏ","း","မ"], "ပုဏ္ဏေးမ"),
+            (["က","ှ","ွ","ျ"], "ကျွှ"), (["က","်","့"], "က့်"),
+            (["က","ု","မ","ိ"], "ကုမိ"), (["က","ု","ု","ိ"], "ကိုု")
+        ] {
+            XCTAssertEqual(run(keys), word.unicodeScalars.map(\.value), keys.description)
+        }
+    }
+
+    func testMyanSanLetterSequencesAndDirectKeys() {
+        for (keys, expected) in [
+            (["စ","ျ"], [0x1008]), (["ေ","စ","ျ"], [0x1008,0x1031]),
+            (["ဥ","ီ"], [0x1026]), (["ေ","သ","ြ","ာ","်"], [0x102A]),
+            (["ဈ"], [0x1008]), (["ဦ"], [0x1026]), (["ဪ"], [0x102A])
+        ] {
+            XCTAssertEqual(run(keys), expected.map(UInt32.init), keys.description)
+        }
+    }
     func testCommittedDeletionOnlyRestoresVerifiedCluster() {
         XCTAssertEqual(BurmeseDeletion.retainedScalars(before: "Aကျိ", afterHostDelete: "A"), "ကျ")
         XCTAssertEqual(BurmeseDeletion.retainedScalars(before: "ကေ", afterHostDelete: ""), "က")
@@ -38,13 +65,7 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(BurmeseDeletion.retainedScalars(before: "x👩🏽‍💻", afterHostDelete: "x"))
     }
 
-    func testInlineCompositionReplacesOnlyTheChangedScalars() {
-        let prebase = BurmeseComposition.edit(from: "\u{200C}ေ", to: "ကေ")
-        XCTAssertEqual(prebase.remove, "\u{200C}ေ")
-        XCTAssertEqual(prebase.insert, "ကေ")
-        let medial = BurmeseComposition.edit(from: "ကေ", to: "ကျေ")
-        XCTAssertEqual(medial.remove, "ေ")
-        XCTAssertEqual(medial.insert, "ျေ")
+    func testBoundedHostDeletion() {
         XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "xက"), "ေ")
         XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "x"), "ကေ")
         XCTAssertEqual(BurmeseDeletion.removedSuffix(before: "xကေ", after: "wx"), "ကေ")

@@ -1,6 +1,26 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    func testEmojiSearchClearsVisibleHostSuggestions() {
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        let lower = app.buttons["key.h"]
+        (lower.exists ? lower : app.buttons["key.H"]).tap()
+        app.buttons["key.e"].tap()
+        let candidates = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "completion."))
+        XCTAssertTrue(candidates.firstMatch.waitForExistence(timeout: 3))
+        let original = field.value as? String
+        app.buttons["Emoji"].tap()
+        app.buttons["emoji.search.query"].tap()
+        XCTAssertEqual(candidates.count, 0)
+        app.buttons["key.c"].tap()
+        XCTAssertEqual(app.buttons["emoji.search.query"].value as? String, "c")
+        XCTAssertEqual(field.value as? String, original)
+    }
+
     func testBackspaceDeletesASelectionAndPreservesItsNeighbors() {
         let app = XCUIApplication()
         app.launch()
