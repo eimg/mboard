@@ -31,6 +31,12 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
         "🌐 ကို ဖိထားပြီး MBoard ကို ရွေးပါ။ English နဲ့ မြန်မာ ပြောင်းဖို့ Keyboard အပေါ်ဘက်က Language Button ကို နှိပ်ပါ။"
     ]
 
+    private let links = [
+        (title: "Settings ဖွင့်ရန်", identifier: "openSettings", url: UIApplication.openSettingsURLString),
+        (title: "Privacy Policy", identifier: "privacyPolicy", url: "https://github.com/eimg/mboard/blob/main/PRIVACY.md"),
+        (title: "Support", identifier: "support", url: "https://github.com/eimg/mboard/blob/main/SUPPORT.md")
+    ]
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "MBoard"
@@ -104,7 +110,7 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
 
     override func numberOfSections(in tableView: UITableView) -> Int { 2 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        section == 0 ? 1 : instructions.count + 1
+        section == 0 ? 1 : instructions.count + links.count
     }
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
@@ -121,12 +127,13 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
         if indexPath.section == 0 { return practiceCell }
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         var content = cell.defaultContentConfiguration()
-        if indexPath.row == instructions.count {
-            content.text = "Settings ဖွင့်ရန်"
+        if indexPath.row >= instructions.count {
+            let link = links[indexPath.row - instructions.count]
+            content.text = link.title
             content.textProperties.color = view.tintColor
             cell.accessoryType = .disclosureIndicator
             cell.accessibilityTraits.insert(.button)
-            cell.accessibilityIdentifier = "openSettings"
+            cell.accessibilityIdentifier = link.identifier
         } else {
             cell.selectionStyle = .none
             setInstruction(instructions[indexPath.row], in: &content)
@@ -136,8 +143,8 @@ final class SetupController: UITableViewController, UITextViewDelegate, UIGestur
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard indexPath.section == 1, indexPath.row == instructions.count,
-              let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        guard indexPath.section == 1, indexPath.row >= instructions.count,
+              let url = URL(string: links[indexPath.row - instructions.count].url) else { return }
         tableView.deselectRow(at: indexPath, animated: true)
         endTyping()
         UIApplication.shared.open(url)

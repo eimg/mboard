@@ -66,7 +66,7 @@ The containing app follows iOS system appearance independently of the keyboard's
 
 The Home Screen icon uses a double-arch mark that reads as both Latin m and Burmese က. The default artwork is white on blue. The dark icon appearance uses blue on charcoal and follows the iOS Home Screen icon setting.
 
-The practice screen pairs a small version of the icon with the MBoard title in the navigation bar. Its icon follows the app’s light or dark appearance. Both section titles use regular weight. The setup section ends with the Settings link.
+The practice screen pairs a small version of the icon with the MBoard title in the navigation bar. Its icon follows the app’s light or dark appearance. Both section titles use regular weight. The setup section includes Settings, Privacy Policy, and Support links. The latter two open the public repository documents from the containing app.
 
 ## 4. Burmese input requirements and risks
 
@@ -117,7 +117,7 @@ Verified from Apple documentation during the feasibility discussion:
 - A custom keyboard does not automatically inherit Apple's complete native prediction/correction engine.
 - Host apps control how inserted text is displayed.
 
-App Store rules and SDK behavior must be rechecked when implementation/distribution decisions depend on them. No distribution path has been selected.
+App Store rules and SDK behavior must be rechecked when implementation/distribution decisions depend on them. Preparation for App Store distribution is documented in [the submission guide](docs/APP_STORE.md).
 
 ## 8. Recommended architecture
 
@@ -152,7 +152,7 @@ Still open rather than implicitly approved or rejected:
 - The user selected Android Gboard as the English and emoji picker reference. Compare remaining behavior using the [English and emoji captures](references/gboard-english/README.md).
 - Automatic correction behavior and controls.
 - Manually saved personal words and learning from literal typing.
-- iPad support, orientation scope, minimum iOS version, and initial target iPhone.
+- Additional keyboard refinements for resizable iPad windows and floating keyboards.
 - Frequency-ranked Burmese corpora and reusable composition rule sources.
 - Personal installation, TestFlight, or eventual App Store release.
 
@@ -191,7 +191,7 @@ The earlier discussion gave only a rough planning impression: weeks for a narrow
 Open `MBoard.xcodeproj`, select the MBoard scheme, and run on an iPhone simulator. Enable MBoard in Settings → General → Keyboard → Keyboards → Add New Keyboard. Focus the practice field in the app and select MBoard from the system globe. If the simulator uses a hardware keyboard, enable the software keyboard in Device Hub. Run core regression tests with `swift test`. The MBoard scheme also includes a UI typing and emoji search test that expects MBoard to be selected.
 
 - The containing app has a Home Screen icon, Myanmar setup instructions, and a native practice text view. Myanmar instructions use additional line spacing and retain the original iOS Settings labels. Tapping outside the practice field or dragging the list dismisses the keyboard and preserves the practice text. VoiceOver users can also use the escape gesture. The **Settings ဖွင့်ရန်** row below the setup instructions uses the public iOS app settings URL. The instructions show the full path to enable the keyboard.
-- The extension targets iPhone on iOS 16 and later. Portrait is the reference geometry. The minimum version and English interaction details are prototype choices.
+- The app and extension target iPhone and iPad on iOS/iPadOS 16 and later. The iPad app declares all four orientations. Portrait iPhone is the original layout reference. The minimum version and English interaction details are prototype choices.
 - Burmese base, Shift, default long presses, and two symbol pages use the emulator captures. English uses staggered QWERTY, digit hints, and sampled long presses. Some sliding alternates, the dedicated numeric keypad, and caps lock remain open.
 - Burmese composition tracks the current segment locally and inserts ordinary Unicode into the host. UIKit can hide a visible selection from the keyboard proxy while a marked range is active. Keeping the host text unmarked lets one native Backspace delete the selection. At a caret, Burmese Backspace removes a scalar when the host deletion can be verified. Reordering a prebase vowel edits the verified suffix of the current segment. Cursor, document or selection changes invalidate stale ownership. An unfinished prebase vowel can still contain Gboard’s intermediate U+200C. Host behavior needs further cross-app testing.
 - The toolbar switches languages and has a settings gear. **Auto-Capitalization** starts on and follows the host’s English capitalization mode, including sentence, word, and all-character fields. Manual Shift remains available. **Word Suggestions** starts on and controls the existing offline candidates in both languages. These choices follow the [emulator settings](references/gboard-english/README.md#typing-settings-observed-on-november-26-2026). The gear also offers System, Light, and Dark appearance. Preferences persist in the extension’s own defaults. System appearance follows the input field’s explicit appearance or the current interface traits.

@@ -4,7 +4,7 @@
 
 ### MBoard 0.1
 
-This first version brings English and Burmese typing to one iPhone keyboard. It targets iOS 16 and later and works offline with Full Access off.
+This first version brings English and Burmese typing to one keyboard for iPhone and iPad. It targets iOS and iPadOS 16 and later and works offline with Full Access off.
 
 - Switch between English QWERTY and a Burmese Unicode layout with shifted keys and long-press alternatives. English auto-capitalization follows the active field and can be turned off.
 - Burmese labels use smaller lettering on the same touch targets. Touch a character key in either language to see an enlarged preview above your finger.
@@ -13,5 +13,7 @@ This first version brings English and Burmese typing to one iPhone keyboard. It 
 - Delete a text selection with one Backspace. At a Burmese insertion point, Backspace can remove one Unicode component at a time.
 - Scroll the emoji catalog, search in English or Burmese, and hold an emoji for available skin tones.
 - Choose System, Light, or Dark keyboard appearance. The companion app includes a practice field, Burmese setup instructions, and a Home Screen icon with light and dark artwork.
+
+- The practice app links to the public privacy policy and support contact.
 
 **Validation so far** · Simulator checks covered typing, deletion, completions and emoji. Build 3 was installed on an iPhone 15 Plus. Cross-app editing and sustained typing performance on a physical iPhone still need testing. Portrait iPhone is the reference layout.
