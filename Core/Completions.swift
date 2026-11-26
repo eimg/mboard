@@ -4,9 +4,169 @@ struct Completion: Equatable {
     let title: String
     let suffix: String
     var learned = false
+    enum Action: Equatable { case append, replace(EnglishToken), selection }
+    var action = Action.append
+}
+
+/// Both segments contain only English letters and internal apostrophes. Keeping the
+/// split at the original caret lets a tap edit just the word the user inspected.
+struct EnglishToken: Equatable {
+    let left: String
+    let right: String
+    var word: String { left + right }
+
+    static func isLetter(_ c: Character) -> Bool {
+        c.isLetter && c.unicodeScalars.first?.properties.name?.hasPrefix("LATIN ") == true
+    }
+
+    static func part(_ c: Character) -> Bool { isLetter(c) || c == "'" || c == "’" }
+
+    init?(before: String, after: String) {
+        let nearby = String(before.reversed().prefix { !$0.isWhitespace }.reversed()) + after.prefix { !$0.isWhitespace }
+        guard !nearby.contains(where: { "@#/_".contains($0) || $0.isNumber }),
+              !nearby.contains("://"),
+              !zip(nearby, nearby.dropFirst()).contains(where: { $0 == "." && Self.isLetter($1) })
+        else { return nil }
+        var leading = String(before.reversed().prefix(while: Self.part).reversed())
+        var trailing = String(after.prefix(while: Self.part))
+        // Opening and closing quotes belong to the surrounding sentence.
+        while let first = leading.first, !Self.isLetter(first) { leading.removeFirst() }
+        while let last = trailing.last, !Self.isLetter(last) { trailing.removeLast() }
+        guard let first = (leading + trailing).first, Self.isLetter(first),
+              leading.count + trailing.count <= 48 else { return nil }
+        left = leading
+        right = trailing
+    }
+
+    /// Keep matching characters on both sides, including the suffix to the right
+    /// of the caret. Move only through the validated word and never delete a neighbor.
+    @MainActor
+    func replace(with target: String, at original: HostContext, in host: BurmeseEditHost) -> Bool {
+        guard original.document != nil, original.selection?.isEmpty != false,
+              host.context == original,
+              EnglishToken(before: original.before ?? "", after: original.after ?? "") == self
+        else { return false }
+        let shared = zip(word, target).prefix { $0 == $1 }.count
+        let old = word.dropFirst(shared), new = target.dropFirst(shared)
+        let tail = zip(old.reversed(), new.reversed()).prefix { $0 == $1 }.count
+        let untouched = String(old.suffix(tail))
+        let move = right.utf16.count - untouched.utf16.count
+        if move != 0 {
+            host.moveCaret(byUTF16: move)
+            let current = host.context
+            let expectedLeft = (original.before ?? "").dropLast(left.count) + word.dropLast(tail)
+            let expectedRight = untouched + (original.after ?? "").dropFirst(right.count)
+            let actualLeft = current.before ?? "", actualRight = current.after ?? ""
+            func agrees(_ actual: String, _ expected: String) -> Bool {
+                if actual.isEmpty || expected.isEmpty { return actual == expected }
+                return actual.hasSuffix(expected) || expected.hasSuffix(actual)
+            }
+            guard current.document == original.document, current.selection?.isEmpty != false,
+                  agrees(actualLeft, String(expectedLeft)),
+                  agrees(String(actualRight.reversed()), String(expectedRight.reversed())),
+                  actualLeft.hasSuffix(old.dropLast(tail)), actualRight.hasPrefix(untouched)
+            else { return false }
+        }
+        let removed = String(old.dropLast(tail))
+        for _ in removed { host.deleteBackward() }
+        let insert = String(new.dropLast(tail))
+        if !insert.isEmpty {
+            let beforeInsertion = host.context
+            host.insert(insert)
+            // If a filtering host declines this insertion, restore the original
+            // fragment only while the same document and caret still own the edit.
+            if host.context == beforeInsertion, beforeInsertion.before?.hasSuffix(insert) != true {
+                if !removed.isEmpty { host.insert(removed) }
+                return false
+            }
+        }
+        if !untouched.isEmpty { host.moveCaret(byUTF16: untouched.utf16.count) }
+        return true
+    }
+}
+
+struct DeferredEnglishSpace {
+    private var anchor: HostContext?
+
+    mutating func remember(_ context: HostContext, accepted word: String) {
+        anchor = nil
+        guard context.document != nil, context.selection?.isEmpty != false,
+              (context.after ?? "").isEmpty, context.before?.hasSuffix(word) == true else { return }
+        anchor = context
+    }
+
+    func applies(at context: HostContext) -> Bool { anchor == context }
+
+    mutating func observe(_ context: HostContext) {
+        if anchor != context { anchor = nil }
+    }
+
+    mutating func consume(before key: String, at context: HostContext) -> Bool {
+        defer { anchor = nil }
+        return applies(at: context) && key.count == 1 && key.first.map(EnglishToken.isLetter) == true
+    }
 }
 
 enum Completions {
+    // A short allowlist also works without an installed English spelling dictionary.
+    private static let joinedPhrases = [
+        "thank you", "see you", "good morning", "how are", "are you",
+        "can you", "let me", "call me", "miss you", "love you", "on my", "of course",
+        "a lot", "for you", "see ya", "right now", "talk soon", "take care"
+    ]
+    private static let splits = Dictionary(uniqueKeysWithValues: joinedPhrases.map {
+        ($0.replacingOccurrences(of: " ", with: ""), $0)
+    })
+
+    static func englishSuggestions(_ token: EnglishToken, apple: [String], guesses: [String],
+                                   learned: [String], allCaps: Bool) -> [Completion] {
+        let source = token.word
+        var choices: [Completion] = []
+        var seen = Set([key(source)])
+        func offer(_ spelling: String) {
+            guard choices.count < 3, seen.insert(key(spelling)).inserted else { return }
+            let title: String
+            if allCaps || source == source.uppercased() { title = spelling.uppercased() }
+            else if source.first?.isUppercase == true { title = spelling.prefix(1).uppercased() + spelling.dropFirst() }
+            else { title = spelling }
+            choices.append(Completion(title: title, suffix: "", action: .replace(token)))
+        }
+        func offerSplit(_ phrase: String) {
+            guard let space = phrase.firstIndex(of: " ") else { return }
+            let boundary = phrase.distance(from: phrase.startIndex, to: space)
+            offer(String(source.prefix(boundary)) + " " + source.dropFirst(boundary))
+        }
+        if !token.right.isEmpty && key(source) == "helo" { offer("hello") }
+        if let phrase = splits[key(source)] { offerSplit(phrase) }
+        // A spelling dictionary may itself propose a missed space. Accept only
+        // splits which preserve every typed letter and introduce one space.
+        for guess in guesses where choices.isEmpty {
+            let parts = guess.components(separatedBy: " ")
+            if parts.count == 2, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isLetter) }),
+               key(parts.joined()) == key(source) { offerSplit(guess) }
+        }
+        if !token.right.isEmpty {
+            for guess in guesses where guess.allSatisfy({ $0.isLetter || $0 == "'" || $0 == "’" }) {
+                offer(guess)
+            }
+        } else {
+            let completions = matches(before: source, language: .english, apple: apple, learned: learned, allCaps: allCaps)
+            choices += completions.filter { seen.insert(key($0.title)).inserted }.prefix(3 - choices.count)
+        }
+        return choices
+    }
+
+    static func selectedBurmese(_ selected: String, learned: [String]) -> [Completion] {
+        guard !selected.isEmpty, selected.unicodeScalars.count <= 48,
+              selected.unicodeScalars.allSatisfy({ (0x1000...0x103F).contains($0.value) }) else { return [] }
+        return matches(before: selected, language: .burmese, learned: learned).compactMap {
+            guard $0.title.utf8.starts(with: selected.utf8) else { return nil }
+            var candidate = $0
+            candidate.action = .selection
+            return candidate
+        }
+    }
+
     private static let english = """
     hello help helpful here home hope how good goodbye morning night nice next
     please thank thanks tomorrow today tonight time together there their then
@@ -34,17 +194,9 @@ enum Completions {
 
     private static let conversationalWords = Set(conversational)
 
-    static func continuesEnglishWord(_ after: String?) -> Bool {
-        guard let next = after?.unicodeScalars.first else { return false }
-        return (CharacterSet.letters.contains(next) && next.properties.name?.hasPrefix("LATIN ") == true)
-            || next == "'" || next == "’"
-    }
-
     static func englishPrefix(in text: String) -> String {
-        let tail = text.unicodeScalars.reversed().prefix {
-            (65...90).contains($0.value) || (97...122).contains($0.value) || $0 == "'" || $0 == "’"
-        }
-        return String(String.UnicodeScalarView(tail.reversed().drop(while: { $0 == "'" || $0 == "’" })))
+        let tail = text.reversed().prefix(while: EnglishToken.part).reversed()
+        return String(tail.drop(while: { !EnglishToken.isLetter($0) }))
     }
 
     static func key(_ word: String) -> String {

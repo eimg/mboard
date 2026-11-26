@@ -60,6 +60,28 @@ private final class EditingHost: BurmeseEditHost {
 }
 
 final class HostEditingTests: XCTestCase {
+    @MainActor func testEnglishReplacementPreservesNeighborsAndEndsAtWordBoundary() async throws {
+        for (left, right, result) in [("he", "lo", "hello"), ("", "helo", "hello"),
+                                     ("thankyou", "", "thank you"), ("se", "eyou", "see you"),
+                                     ("ta", "ht", "that"), ("spel", "lingg", "spelling")] {
+            let host = EditingHost("မင်္ဂလာ🥰 " + left, right: right + ", too.")
+            let context = host.context
+            let token = try XCTUnwrap(EnglishToken(before: host.left, after: host.right))
+            XCTAssertTrue(token.replace(with: result, at: context, in: host))
+            XCTAssertEqual(host.left, "မင်္ဂလာ🥰 " + result)
+            XCTAssertEqual(host.right, ", too.")
+            XCTAssertFalse(token.replace(with: result, at: context, in: host))
+        }
+    }
+
+    @MainActor func testEnglishCorrectionRestoresTextWhenHostRejectsInsertion() async throws {
+        let host = EditingHost("go ba", right: "d!")
+        host.rejectedInput = "e"
+        let token = try XCTUnwrap(EnglishToken(before: host.left, after: host.right))
+        XCTAssertFalse(token.replace(with: "bed", at: host.context, in: host))
+        XCTAssertEqual(host.text, "go bad!")
+    }
+
     @MainActor func testVowelOrdersWithSlidingAndDisappearingContext() async {
         let prefix = String(repeating: "paragraph ", count: 44)
         for excludesMark in [false, true] {

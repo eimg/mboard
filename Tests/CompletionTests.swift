@@ -3,6 +3,46 @@ import XCTest
 @testable import MBoardCore
 
 final class CompletionTests: XCTestCase {
+    func testEnglishCorrectionAndPhraseCandidates() throws {
+        func titles(_ left: String, _ right: String, _ guesses: [String] = []) throws -> [String] {
+            let token = try XCTUnwrap(EnglishToken(before: left, after: right))
+            return Completions.englishSuggestions(token, apple: [], guesses: guesses, learned: [],
+                                                  allCaps: false).map(\.title)
+        }
+        XCTAssertEqual(try titles("say he", "lo!"), ["hello"])
+        XCTAssertEqual(try titles("", "Helo!").first, "Hello")
+        XCTAssertTrue(try titles("say ", "hello").isEmpty)
+        XCTAssertEqual(try titles("THANKYOU", "").first, "THANK YOU")
+        XCTAssertEqual(try titles("see", "you").first, "see you")
+        XCTAssertEqual(try titles("gotit", "", ["got it", "go tit"]), ["got it"])
+        XCTAssertFalse(try titles("already", "").contains("al ready"))
+        for (left, right) in [("me@thank", "you"), ("www.thankyou", ""), ("see_", "you"),
+                              ("https://a/", "thankyou"), ("thankyou2", "")] {
+            XCTAssertNil(EnglishToken(before: left, after: right))
+        }
+        XCTAssertEqual(Completions.selectedBurmese("ကျော", learned: []).first?.title, "ကျောင်း")
+        XCTAssertTrue(Completions.selectedBurmese("သူ ကျော", learned: []).isEmpty)
+    }
+
+    func testDeferredSpaceBelongsToTheAcceptedCaret() {
+        let doc = UUID()
+        func at(_ left: String, _ right: String = "") -> HostContext {
+            HostContext(document: doc, before: left, after: right, selection: nil)
+        }
+        var pending = DeferredEnglishSpace()
+        let end = at("say hello")
+        for key in ["w", ",", " ", "’", "က", "🥰", "\n"] {
+            pending.remember(end, accepted: "hello")
+            XCTAssertEqual(pending.consume(before: key, at: end), key == "w")
+            XCTAssertFalse(pending.consume(before: "x", at: end))
+        }
+        pending.remember(end, accepted: "hello")
+        pending.observe(at("say hel", "lo"))
+        XCTAssertFalse(pending.consume(before: "w", at: end))
+        pending.remember(at("hello", ","), accepted: "hello")
+        XCTAssertFalse(pending.applies(at: at("hello", ",")))
+    }
+
     func testBurmeseSuggestionsRespectTextOnBothSidesOfCaret() {
         func titles(after right: String) -> [String] {
             Completions.matches(before: "သူကျော", after: right, language: .burmese).map(\.title)
@@ -29,8 +69,8 @@ final class CompletionTests: XCTestCase {
     }
 
     func testEnglishCaretBoundariesAndLearnedCase() {
-        for right in ["llo", "'t", "’ll", "é"] { XCTAssertTrue(Completions.continuesEnglishWord(right)) }
-        for right in ["", " ", ".", "ကျောင်း"] { XCTAssertFalse(Completions.continuesEnglishWord(right)) }
+        for right in ["llo", "'t", "’ll", "é"] { XCTAssertEqual(EnglishToken(before: "he", after: right)?.right, right) }
+        for right in ["", " ", ".", "ကျောင်း"] { XCTAssertEqual(EnglishToken(before: "he", after: right)?.right, "") }
         for (prefix, expected) in [("he", "hello"), ("He", "Hello"), ("HE", "HELLO")] {
             XCTAssertEqual(Completions.matches(before: prefix, language: .english, learned: ["HELLO"]).first?.title, expected)
         }

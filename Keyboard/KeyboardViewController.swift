@@ -42,6 +42,15 @@ private final class EnglishWordCompletions {
         cache.countLimit = 96
     }
 
+    func guesses(for word: String) -> [String] {
+        guard word.count >= 3, let language else { return [] }
+        let range = NSRange(location: 0, length: word.utf16.count)
+        let misspelled = checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0,
+                                                       wrap: false, language: language)
+        guard misspelled == range else { return [] }
+        return Array((checker.guesses(forWordRange: range, in: word, language: language) ?? []).prefix(12))
+    }
+
     func words(for prefix: String) -> [String] {
         guard !prefix.isEmpty, let language else { return [] }
         if let saved = cache.object(forKey: prefix as NSString) as? [String] { return saved }
@@ -72,6 +81,7 @@ final class KeyboardViewController: UIInputViewController {
     private var manualShiftContext: HostContext?
     private var shift = false
     private var doubleSpace = DoubleSpaceShortcut()
+    private var deferredSpace = DeferredEnglishSpace()
     private var typedOnSymbols = false
     private var symbolPage: Int?
     private var editor = BurmeseHostEditor()
@@ -186,6 +196,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         typedOnSymbols = false
         closeEmoji()
@@ -228,6 +239,7 @@ final class KeyboardViewController: UIInputViewController {
         let suggestions = UIAction(title: "Word Suggestions", state: wordSuggestions ? .on : .off) { [weak self] _ in
             guard let self else { return }
             wordSuggestions.toggle()
+            deferredSpace = DeferredEnglishSpace()
             UserDefaults.standard.set(wordSuggestions, forKey: "wordSuggestions")
             updateSuggestions()
             configureSettingsMenu()
@@ -257,7 +269,8 @@ final class KeyboardViewController: UIInputViewController {
         case .allCharacters: mode = .allCharacters
         default: mode = .sentences
         }
-        return mode.shouldShift(before: context.before ?? "", after: context.after ?? "")
+        let boundary = deferredSpace.applies(at: context) ? " " : ""
+        return mode.shouldShift(before: (context.before ?? "") + boundary, after: context.after ?? "")
     }
 
     private func updateEnglishShift() {
@@ -267,6 +280,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func switchLanguage() {
+        deferredSpace = DeferredEnglishSpace()
         if isSearchingEmoji { emojiPicker?.commitQueryComposition() }
         else { finishComposition() }
         doubleSpace = DoubleSpaceShortcut()
@@ -444,6 +458,7 @@ final class KeyboardViewController: UIInputViewController {
             self.doubleSpace = DoubleSpaceShortcut()
             self.typedOnSymbols = false
             self.symbolPage = self.symbolPage == nil ? 1 : nil
+            self.deferredSpace = DeferredEnglishSpace()
             self.manualShiftContext = nil
             self.shift = self.language == .english && self.symbolPage == nil && self.englishShift(for: HostContext(self.textDocumentProxy))
             self.rebuild()
@@ -487,6 +502,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func openEmoji() {
+        deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         finishComposition()
         cancelGestures()
@@ -569,6 +585,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func tapSpace() {
+        deferredSpace = DeferredEnglishSpace()
         if isSearchingEmoji {
             emojiPicker?.appendToQuery(" ")
         } else {
@@ -601,11 +618,14 @@ final class KeyboardViewController: UIInputViewController {
             didType()
             return
         }
-        insertHostText(value)
+        let addSpace = language == .english && symbolPage == nil && allowsEnglishWordEdits
+            && deferredSpace.consume(before: value, at: HostContext(textDocumentProxy))
+        insertHostText(addSpace ? " " + value : value)
         if value == "\n" { returnToLettersAfterSeparator() }
     }
 
     private func insertHostText(_ value: String) {
+        deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         finishComposition()
         textDocumentProxy.insertText(value)
@@ -632,6 +652,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func deleteFromHost() {
+        deferredSpace = DeferredEnglishSpace()
         manualShiftContext = nil
         editor.backspace(in: editHost)
         updateEnglishShift()
@@ -642,27 +663,68 @@ final class KeyboardViewController: UIInputViewController {
         editor.contextForSuggestions(HostContext(textDocumentProxy))
     }
 
+    private var allowsEnglishWordEdits: Bool {
+        switch textDocumentProxy.keyboardType {
+        case nil, .default, .asciiCapable, .webSearch: return true
+        default: return false
+        }
+    }
+
+    private func accept(_ candidate: Completion, context: HostContext) {
+        deferredSpace = DeferredEnglishSpace()
+        doubleSpace = DoubleSpaceShortcut()
+        finishComposition()
+        switch candidate.action {
+        case .append:
+            textDocumentProxy.insertText(candidate.suffix)
+        case .selection:
+            guard HostContext(textDocumentProxy) == context else { return }
+            textDocumentProxy.insertText(candidate.title)
+        case .replace(let token):
+            guard token.replace(with: candidate.title, at: context, in: editHost) else {
+                updateSuggestions()
+                return
+            }
+        }
+        if !candidate.title.contains(" ") {
+            LearnedWordStore.shared.record(candidate.title, language: language)
+        }
+        if language == .english, allowsEnglishWordEdits, symbolPage == nil {
+            deferredSpace.remember(HostContext(textDocumentProxy), accepted: candidate.title)
+        }
+        didType()
+    }
+
     private func updateSuggestions() {
         lookup?.cancel()
         candidates.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard wordSuggestions, emojiPicker == nil else { return }
         let context = suggestionContext
-        guard context.document != nil, context.selection?.isEmpty != false else { return }
-        guard let before = context.before, !before.isEmpty else { return }
+        guard context.document != nil else { return }
+        let before = context.before ?? "", after = context.after ?? ""
+        let selected = context.selection ?? ""
         let mode = language
-        guard mode != .english || !Completions.continuesEnglishWord(context.after) else { return }
+        let token = mode == .english ? EnglishToken(before: before, after: after) : nil
+        if mode == .english {
+            guard allowsEnglishWordEdits, token != nil, selected.isEmpty,
+                  !deferredSpace.applies(at: context) else { return }
+        } else if before.isEmpty && selected.isEmpty { return }
         let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
         lookup = Task { [weak self] in
-            // UIKit isolates UITextChecker to the main actor. Wait for a pause
-            // before asking it, and never call it from the key's insertion action.
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard !Task.isCancelled else { return }
-            let recent = String(before.unicodeScalars.suffix(96))
             let learned = await LearnedWordStore.shared.ranked(for: mode)
             guard !Task.isCancelled, let self else { return }
-            let apple = mode == .english ? englishCompletions.words(for: Completions.englishPrefix(in: recent)) : []
+            let apple = token.flatMap { $0.right.isEmpty ? self.englishCompletions.words(for: $0.left) : nil } ?? []
+            let guesses = token.map { self.englishCompletions.guesses(for: $0.word) } ?? []
             let results = await Task.detached(priority: .utility) {
-                Completions.matches(before: recent, after: context.after, language: mode, apple: apple, learned: learned, allCaps: allCaps)
+                if let token {
+                    return Completions.englishSuggestions(token, apple: apple, guesses: guesses,
+                                                          learned: learned, allCaps: allCaps)
+                }
+                if !selected.isEmpty { return Completions.selectedBurmese(selected, learned: learned) }
+                return Completions.matches(before: String(before.unicodeScalars.suffix(96)),
+                                           after: after, language: mode, learned: learned)
             }.value
             guard !Task.isCancelled, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
                   self.suggestionContext == context else { return }
@@ -676,8 +738,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.addAction(UIAction { [weak self] _ in
                     guard let self, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
                           self.suggestionContext == context else { return }
-                    LearnedWordStore.shared.record(candidate.title, language: mode)
-                    self.insertHostText(candidate.suffix)
+                    self.accept(candidate, context: context)
                 }, for: .touchUpInside)
                 if candidate.learned {
                     let forget = UIAction(title: "Forget This Suggestion", attributes: .destructive) { [weak self] _ in
@@ -693,6 +754,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func selectionDidChange(_ textInput: UITextInput?) {
         let context = HostContext(textDocumentProxy)
+        deferredSpace.observe(context)
         doubleSpace.selectionChanged(to: context)
         editor.check(context, in: editHost)
         updateEnglishShift()
@@ -700,7 +762,9 @@ final class KeyboardViewController: UIInputViewController {
     }
     override func textDidChange(_ textInput: UITextInput?) {
         guard isViewLoaded else { return }
-        editor.check(HostContext(textDocumentProxy), in: editHost)
+        let context = HostContext(textDocumentProxy)
+        deferredSpace.observe(context)
+        editor.check(context, in: editHost)
         updateEnglishShift()
         if currentReturnKey != textDocumentProxy.returnKeyType { rebuild() }
         updateSuggestions()

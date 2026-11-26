@@ -29,7 +29,7 @@ Open the MBoard app to practice typing and read the Myanmar setup instructions. 
 ## Use the keyboard
 
 - Use the far-left key on the bottom row. Tap **abc** for English or **ကခ** for Burmese.
-- Tap a suggestion to append its missing letters. English uses Apple’s on-device completions. Burmese uses a bundled word list and everyday phrases, including inside text written without spaces.
+- Tap an English suggestion and keep typing to start the next word. Move the cursor into a misspelled word to see corrections, or choose a suggested split such as **thank you** for **thankyou**. English uses Apple’s on-device dictionary. Burmese uses a bundled word list and everyday phrases, including inside text written without spaces.
 - Suggestions you pick move up for future matches. Long-press a learned suggestion and choose **Forget This Suggestion** to reset its ranking. To reset both languages, tap the settings gear at the top right and choose **Clear Learned Words → Clear for Both Languages**.
 - Tap the smiley key to scroll through emoji. Tap the search field to type a query, or touch and hold an emoji to see its available skin tones.
 - Tap the settings gear in the top-right corner for **Auto-Capitalization**, **Word Suggestions**, and **System**, **Light**, or **Dark** appearance. Both typing switches start on. In ordinary text fields, English words in a Burmese sentence start with a capital, as in **ဒီမှာ App Store ကိုဖွင့်ပါ**.
