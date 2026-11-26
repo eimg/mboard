@@ -39,6 +39,14 @@ Open Settings → General → Keyboard → Keyboards → Add New Keyboard and ch
 
 Use the local, Git-ignored `screenshots/` directory. Use full-resolution opaque PNG files. Apple accepts one to ten images for each supplied display size. Its current required-size summary calls for a medium Dynamic Island iPhone and a 13-inch iPad. The large iPhone set is another supported slot. [Apple’s screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
 
+| Local folder | Device and slot | Portrait pixels | Contents |
+| --- | --- | --- | --- |
+| `screenshots/iphone/iphone-*.png` | iPhone 17 Pro, medium Dynamic Island | 1206 × 2622 | Burmese typing, English typing, emoji |
+| `screenshots/iphone/max-*.png` | iPhone 17 Pro Max, large Dynamic Island | 1320 × 2868 | Burmese typing, English typing, emoji |
+| `screenshots/ipad/` | iPad Pro 13-inch (M5) | 2064 × 2752 | Burmese typing, English typing, emoji |
+
+The images show the installed extension in the practice app. On the 13-inch iPad simulator, input checks produced `ကျောင်း`, then `ကျောင်း school`, then `ကျောင်း school😀`. The medium iPhone simulator also produced the bilingual text. Both targets in the local unsigned device archive declare iPhone and iPad compatibility and contain their privacy manifests.
+
 ## Before the eventual upload
 
 1. Confirm developer membership, agreements, app name availability, SKU, legal copyright holder, pricing, storefronts and trader declarations. Enter the review contact’s name, email and telephone number privately in App Store Connect.
