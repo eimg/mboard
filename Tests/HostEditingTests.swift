@@ -62,6 +62,7 @@ private final class EditingHost: BurmeseEditHost {
 final class HostEditingTests: XCTestCase {
     @MainActor func testEnglishReplacementPreservesNeighborsAndEndsAtWordBoundary() async throws {
         for (left, right, result) in [("he", "lo", "hello"), ("", "helo", "hello"),
+                                     ("thankyo", "", "thank you"), ("thanky", "", "thank you"),
                                      ("thankyou", "", "thank you"), ("se", "eyou", "see you"),
                                      ("ta", "ht", "that"), ("spel", "lingg", "spelling")] {
             let host = EditingHost("မင်္ဂလာ🥰 " + left, right: right + ", too.")

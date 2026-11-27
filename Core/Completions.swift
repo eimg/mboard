@@ -114,9 +114,35 @@ enum Completions {
         "can you", "let me", "call me", "miss you", "love you", "on my", "of course",
         "a lot", "for you", "see ya", "right now", "talk soon", "take care"
     ]
-    private static let splits = Dictionary(uniqueKeysWithValues: joinedPhrases.map {
-        ($0.replacingOccurrences(of: " ", with: ""), $0)
-    })
+    // Index prefixes only after the user has started the second word. For
+    // shared prefixes (e.g. seey), the phrase list supplies the tie-breaker.
+    private static let joinedPrefixes: [String: String] = {
+        var index = [String: String]()
+        for phrase in joinedPhrases {
+            let words = phrase.split(separator: " ")
+            var prefix = String(words[0])
+            for letter in words[1] {
+                prefix.append(letter)
+                if index[prefix] == nil || prefix.count == phrase.count - 1 {
+                    index[prefix] = phrase
+                }
+            }
+        }
+        return index
+    }()
+
+    static func joinedPhrase(for token: EnglishToken, allCaps: Bool) -> Completion? {
+        let source = token.word
+        guard let phrase = joinedPrefixes[key(source)],
+              let space = phrase.firstIndex(of: " ") else { return nil }
+        let joined = phrase.replacingOccurrences(of: " ", with: "")
+        guard token.right.isEmpty || source.count == joined.count else { return nil }
+        let boundary = phrase.distance(from: phrase.startIndex, to: space)
+        var title = String(source.prefix(boundary)) + " " + source.dropFirst(boundary)
+        title += joined.dropFirst(source.count)
+        if allCaps || source == source.uppercased() { title = title.uppercased() }
+        return Completion(title: title, suffix: "", action: .replace(token))
+    }
 
     static func englishSuggestions(_ token: EnglishToken, apple: [String], guesses: [String],
                                    learned: [String], allCaps: Bool) -> [Completion] {
@@ -137,7 +163,10 @@ enum Completions {
             offer(String(source.prefix(boundary)) + " " + source.dropFirst(boundary))
         }
         if !token.right.isEmpty && key(source) == "helo" { offer("hello") }
-        if let phrase = splits[key(source)] { offerSplit(phrase) }
+        if let phrase = joinedPhrase(for: token, allCaps: allCaps) {
+            choices.append(phrase)
+            seen.insert(key(phrase.title))
+        }
         // A spelling dictionary may itself propose a missed space. Accept only
         // splits which preserve every typed letter and introduce one space.
         for guess in guesses where choices.isEmpty {

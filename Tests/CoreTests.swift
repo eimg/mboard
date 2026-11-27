@@ -2,6 +2,23 @@ import XCTest
 @testable import MBoardCore
 
 final class CoreTests: XCTestCase {
+    func testSpacebarDragStepsThroughVisibleCharactersAndReversesAtEdges() {
+        let id = UUID()
+        func context(_ before: String, _ after: String) -> HostContext {
+            HostContext(document: id, before: before, after: after, selection: nil)
+        }
+        let syllable = "ကို"
+        let emoji = "👩🏽‍💻"
+        var drag = SpacebarCursorDrag(document: id, x: 100)
+        XCTAssertEqual(drag.offset(to: 95, in: context(syllable + emoji, "")), 0)
+        XCTAssertEqual(drag.offset(to: 90, in: context(syllable + emoji, "")), -emoji.utf16.count)
+        XCTAssertEqual(drag.offset(to: 70, in: context(syllable, emoji)), -syllable.utf16.count)
+        XCTAssertEqual(drag.offset(to: 50, in: context("", syllable + emoji)), 0)
+        XCTAssertEqual(drag.offset(to: 70, in: context("", syllable + emoji)), (syllable + emoji).utf16.count)
+        let other = HostContext(document: UUID(), before: "abc", after: "xyz", selection: nil)
+        XCTAssertEqual(drag.offset(to: 10, in: other), 0)
+    }
+
     // Keep committed units separate from the current marked segment, as in the extension.
     private func run(_ keys: [String]) -> [UInt32] {
         var committed = ""

@@ -80,6 +80,7 @@ final class KeyboardViewController: UIInputViewController {
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
     private var shift = false
+    private var cursorDrag: SpacebarCursorDrag?
     private var doubleSpace = DoubleSpaceShortcut()
     private var deferredSpace = DeferredEnglishSpace()
     private var typedOnSymbols = false
@@ -274,7 +275,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func updateEnglishShift() {
-        guard isViewLoaded, language == .english, symbolPage == nil, repeatingDelete == nil else { return }
+        guard isViewLoaded, language == .english, symbolPage == nil, repeatingDelete == nil, cursorDrag == nil else { return }
         let wanted = englishShift(for: HostContext(textDocumentProxy))
         if shift != wanted { shift = wanted; refreshEnglishCase() }
     }
@@ -296,6 +297,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func cancelGestures() {
+        cursorDrag = nil
+        rows.alpha = 1
         keyPopup.dismiss()
         repeatingDelete?.invalidate()
         repeatingDelete = nil
@@ -481,6 +484,12 @@ final class KeyboardViewController: UIInputViewController {
         let space = command(language.title) { [weak self] in self?.tapSpace() }
         space.accessibilityLabel = "Space"
         space.fill = KeyColors.letter
+        if !isSearchingEmoji {
+            space.accessibilityHint = "Hold and drag left or right to move the cursor."
+            let hold = UILongPressGestureRecognizer(target: self, action: #selector(holdSpace(_:)))
+            hold.minimumPressDuration = 0.35
+            space.addGestureRecognizer(hold)
+        }
         bottom.addArrangedSubview(space)
         let trailing = language == .english && symbolPage == nil ? KeyboardLayout.period : LetterKey(punctuation[1])
         bottom.addArrangedSubview(letterButton(trailing))
@@ -582,6 +591,40 @@ final class KeyboardViewController: UIInputViewController {
         }
         editor.type(value, in: editHost)
         didType()
+    }
+
+    @objc private func holdSpace(_ gesture: UILongPressGestureRecognizer) {
+        let x = gesture.location(in: board).x
+        switch gesture.state {
+        case .began:
+            guard !isSearchingEmoji, let document = HostContext.identifier(textDocumentProxy) else { return }
+            cancelGestures()
+            deferredSpace = DeferredEnglishSpace()
+            doubleSpace = DoubleSpaceShortcut()
+            manualShiftContext = nil
+            finishComposition()
+            cursorDrag = SpacebarCursorDrag(document: document, x: x)
+            rows.alpha = 0.65
+            updateSuggestions()
+        case .changed, .ended:
+            guard cursorDrag != nil else { return }
+            let context = HostContext(textDocumentProxy)
+            if cursorDrag?.document == context.document {
+                let delta = cursorDrag?.offset(to: x, in: context) ?? 0
+                if delta != 0 { editHost.moveCaret(byUTF16: delta) }
+                if gesture.state == .changed { return }
+            }
+            finishCursorDrag()
+        case .cancelled, .failed:
+            if cursorDrag != nil { finishCursorDrag() }
+        default: break
+        }
+    }
+
+    private func finishCursorDrag() {
+        cancelGestures()
+        updateEnglishShift()
+        updateSuggestions()
     }
 
     private func tapSpace() {
@@ -698,7 +741,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateSuggestions() {
         lookup?.cancel()
         candidates.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        guard wordSuggestions, emojiPicker == nil else { return }
+        guard wordSuggestions, emojiPicker == nil, cursorDrag == nil else { return }
         let context = suggestionContext
         guard context.document != nil else { return }
         let before = context.before ?? "", after = context.after ?? ""
@@ -710,6 +753,8 @@ final class KeyboardViewController: UIInputViewController {
                   !deferredSpace.applies(at: context) else { return }
         } else if before.isEmpty && selected.isEmpty { return }
         let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
+        let immediate = token.flatMap { Completions.joinedPhrase(for: $0, allCaps: allCaps) }
+        if let immediate { addSuggestion(immediate, context: context, language: mode) }
         lookup = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard !Task.isCancelled else { return }
@@ -728,28 +773,32 @@ final class KeyboardViewController: UIInputViewController {
             }.value
             guard !Task.isCancelled, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
                   self.suggestionContext == context else { return }
-            for candidate in results {
-                let button = UIButton(type: .system)
-                button.accessibilityIdentifier = "completion." + candidate.title
-                button.setTitle(candidate.title, for: .normal)
-                button.titleLabel?.font = .systemFont(ofSize: 14)
-                button.titleLabel?.adjustsFontSizeToFitWidth = true
-                button.tintColor = KeyColors.ink
-                button.addAction(UIAction { [weak self] _ in
-                    guard let self, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
-                          self.suggestionContext == context else { return }
-                    self.accept(candidate, context: context)
-                }, for: .touchUpInside)
-                if candidate.learned {
-                    let forget = UIAction(title: "Forget This Suggestion", attributes: .destructive) { [weak self] _ in
-                        LearnedWordStore.shared.forget(candidate.title, language: mode)
-                        self?.updateSuggestions()
-                    }
-                    button.menu = UIMenu(children: [forget])
-                }
-                self.candidates.addArrangedSubview(button)
+            for candidate in results where candidate != immediate {
+                self.addSuggestion(candidate, context: context, language: mode)
             }
         }
+    }
+
+    private func addSuggestion(_ candidate: Completion, context: HostContext, language mode: Language) {
+        let button = UIButton(type: .system)
+        button.accessibilityIdentifier = "completion." + candidate.title
+        button.setTitle(candidate.title, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 14)
+        button.titleLabel?.adjustsFontSizeToFitWidth = true
+        button.tintColor = KeyColors.ink
+        button.addAction(UIAction { [weak self] _ in
+            guard let self, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
+                  self.suggestionContext == context else { return }
+            self.accept(candidate, context: context)
+        }, for: .touchUpInside)
+        if candidate.learned {
+            let forget = UIAction(title: "Forget This Suggestion", attributes: .destructive) { [weak self] _ in
+                LearnedWordStore.shared.forget(candidate.title, language: mode)
+                self?.updateSuggestions()
+            }
+            button.menu = UIMenu(children: [forget])
+        }
+        candidates.addArrangedSubview(button)
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {

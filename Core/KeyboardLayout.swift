@@ -5,6 +5,29 @@ enum Language: String {
     var title: String { self == .burmese ? "မြန်မာ" : "English" }
 }
 
+/// A drag advances by visible characters. UIKit's text proxy measures offsets in UTF-16.
+struct SpacebarCursorDrag {
+    let document: UUID
+    private var anchorX: CGFloat
+    private static let pointsPerCharacter: CGFloat = 10
+
+    init(document: UUID, x: CGFloat) {
+        self.document = document
+        anchorX = x
+    }
+
+    mutating func offset(to x: CGFloat, in context: HostContext) -> Int {
+        guard context.document == document else { return 0 }
+        let steps = Int((x - anchorX) / Self.pointsPerCharacter)
+        guard steps != 0 else { return 0 }
+        anchorX += CGFloat(steps) * Self.pointsPerCharacter
+        if steps < 0 {
+            return -((context.before ?? "").suffix(-steps).utf16.count)
+        }
+        return (context.after ?? "").prefix(steps).utf16.count
+    }
+}
+
 /// Only a pair of Space key taps at the same insertion point can end a sentence.
 struct DoubleSpaceShortcut {
     private var first: (time: Date, language: Language, context: HostContext)?

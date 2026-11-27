@@ -93,13 +93,15 @@ Character keys use 19-point type for Myanmar glyphs and 23-point type for Latin 
 
 The keyboard inserts plain Unicode text into the host app. It cannot force the host app or recipient to render that text in Pyidaungsu. Layout compatibility must not depend on installing a particular font in every destination app.
 
+Hold Space on the typing keyboard for 0.35 seconds to enter cursor mode. The keys dim while horizontal dragging moves the insertion point in visible-character steps. Releasing the hold keeps the caret in place. Cursor mode and alternate menus use visual feedback. Haptics are deferred to keep Full Access off. Ordinary taps and double-Space keep their existing behavior.
+
 ## 6. Initial suggestion engine
 
 The suggestion bar displays up to three completions. Prefix completions append only the missing Unicode scalars. English matching supports straight and curly apostrophes and preserves the typed prefix. MBoard uses the available US English `UITextChecker` dictionary, falling back to another available English locale, and reserves a place for a matching everyday word when possible. If UIKit supplies no completions, the bundled English vocabulary still works.
 
 After accepting an English suggestion at the end of ordinary text, typing the next English letter inserts one separating space. Punctuation attaches directly, Space inserts one space, and Backspace edits the accepted word. Moving the caret, switching keyboards or languages, opening emoji or symbols, and changing fields clear the pending space. The sentence shortcut still requires two Space taps.
 
-With the caret inside or immediately before an English word, MBoard checks the whole word for spelling suggestions. Tapping one edits that word and places the caret at its end. Common joined phrases and exact two-word splits from the local spelling dictionary can also appear in the three slots, including at the end of a word. A split requires a tap. Email and URL fields and address-like tokens skip these suggestions.
+With the caret inside or immediately before an English word, MBoard checks the whole word for spelling suggestions. Tapping one edits that word and places the caret at its end. Common joined phrases and exact two-word splits from the local spelling dictionary can also appear in the three slots, including at the end of a word. For a bundled phrase, the bar offers the complete phrase as soon as the first letter of its second word is typed without a space. For example, `thanky`, `thankyo`, and `thankyou` all offer `thank you`. A split requires a tap. Email and URL fields and address-like tokens skip these suggestions.
 
 Burmese lookup tries the longest plausible prefix first, including word starts inside continuous text. It hides completions when a known word spans the caret or a combining mark follows it. Between words it omits candidates whose ending would duplicate text on the right. Hand-ranked conversational forms take priority over the word-break dictionary’s UTF-8 order. The extension bundles 41,120 entries from ICU 78.1 and searches the sorted list by prefix off the input thread. The resource retains the original entries and ships with the Unicode and Myanmar Karen Word Lists notices. [Upstream dictionary](https://github.com/unicode-org/icu/blob/release-78.1/icu4c/source/data/brkitr/dictionaries/burmesedict.txt) · [Bundled notices](Core/Resources/BurmeseWords-LICENSE.txt)
 
@@ -154,7 +156,7 @@ Still open rather than implicitly approved or rejected:
 
 - Exact English punctuation/number-row/long-press preferences.
 - Cursor gestures and deletion gestures.
-- Haptics, sound, key previews, and timing preferences.
+- Sound, key previews, and timing preferences.
 - The user selected Android Gboard as the English and emoji picker reference. Compare remaining behavior using the [English and emoji captures](references/gboard-english/README.md).
 - Automatic correction behavior and controls.
 - Manually saved personal words and learning from literal typing.

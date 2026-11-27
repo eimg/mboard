@@ -24,6 +24,30 @@ final class CompletionTests: XCTestCase {
         XCTAssertTrue(Completions.selectedBurmese("သူ ကျော", learned: []).isEmpty)
     }
 
+    func testJoinedPhraseAppearsWhileTypingTheSecondWord() throws {
+        func candidates(_ left: String, _ right: String = "", allCaps: Bool = false) throws -> [String] {
+            let token = try XCTUnwrap(EnglishToken(before: left, after: right))
+            let ranked = Completions.englishSuggestions(token, apple: ["thankyou"], guesses: ["thank you"],
+                                                        learned: ["thankyou"], allCaps: allCaps)
+            if let immediate = Completions.joinedPhrase(for: token, allCaps: allCaps) {
+                XCTAssertEqual(ranked.first, immediate)
+                XCTAssertEqual(ranked.filter { $0.title == immediate.title }.count, 1)
+            }
+            return ranked.map(\.title)
+        }
+        for prefix in ["thanky", "thankyo", "thankyou"] {
+            XCTAssertEqual(try candidates("say " + prefix).first, "thank you")
+        }
+        XCTAssertEqual(try candidates("Thankyo").first, "Thank you")
+        XCTAssertEqual(try candidates("THANKY").first, "THANK YOU")
+        XCTAssertEqual(try candidates("thankyo", allCaps: true).first, "THANK YOU")
+        XCTAssertEqual(try candidates("seey").first, "see you")
+        XCTAssertEqual(try candidates("seeya").first, "see ya")
+        for (left, right) in [("thank", ""), ("thanks", ""), ("thankyo", "x"), ("thank", "yo")] {
+            XCTAssertFalse(try candidates(left, right).contains("thank you"))
+        }
+    }
+
     func testDeferredSpaceBelongsToTheAcceptedCaret() {
         let doc = UUID()
         func at(_ left: String, _ right: String = "") -> HostContext {
