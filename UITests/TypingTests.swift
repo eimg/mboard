@@ -1,6 +1,25 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    func testEnglishDoubleShiftLocksUntilTheNextShiftTap() {
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        let shift = app.buttons["Shift"]
+        shift.doubleTap()
+        XCTAssertEqual(shift.value as? String, "Caps Lock")
+        for key in ["key.H", "key.I", "Space", "key.M", "key.E"] { app.buttons[key].tap() }
+        XCTAssertEqual(field.value as? String, "HI ME")
+        shift.tap()
+        app.buttons["key.a"].tap()
+        shift.tap()
+        app.buttons["key.B"].tap()
+        app.buttons["key.c"].tap()
+        XCTAssertEqual(field.value as? String, "HI MEaBc")
+    }
+
     func testSentenceShortcutsAndSymbolPagesInBothLanguages() {
         let app = XCUIApplication()
         app.launch()

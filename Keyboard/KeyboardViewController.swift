@@ -107,6 +107,7 @@ final class KeyboardViewController: UIInputViewController {
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
     private var shift = false
+    private var capsLockDocument: UUID?
     private var cursorDrag: SpacebarCursorDrag?
     private var doubleSpace = DoubleSpaceShortcut()
     private var deferredSpace = DeferredEnglishSpace()
@@ -242,6 +243,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        capsLockDocument = nil
         deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         typedOnSymbols = false
@@ -301,6 +303,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func englishShift(for context: HostContext) -> Bool {
+        if let capsLockDocument {
+            if capsLockDocument == context.document { return true }
+            self.capsLockDocument = nil
+        }
         if manualShiftContext == context { return shift }
         manualShiftContext = nil
         guard autoCapitalize, !isSearchingEmoji else { return false }
@@ -323,10 +329,16 @@ final class KeyboardViewController: UIInputViewController {
     private func updateEnglishShift() {
         guard isViewLoaded, language == .english, symbolPage == nil, repeatingDelete == nil, cursorDrag == nil else { return }
         let wanted = englishShift(for: HostContext(textDocumentProxy))
-        if shift != wanted { shift = wanted; refreshEnglishCase() }
+        if shift != wanted {
+            shift = wanted
+            refreshEnglishCase()
+        } else if englishShiftButton?.accessibilityValue != shiftValue {
+            updateShiftButton()
+        }
     }
 
     private func switchLanguage() {
+        capsLockDocument = nil
         deferredSpace = DeferredEnglishSpace()
         if isSearchingEmoji { emojiPicker?.commitQueryComposition() }
         else { finishComposition() }
@@ -387,12 +399,42 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshEnglishCase() {
-        guard let englishShiftButton else { rebuild(); return }
+        guard englishShiftButton != nil else { rebuild(); return }
         keyPopup.dismiss()
         let letters = KeyboardLayout.letters(.english, shift: shift).joined()
         for (button, letter) in zip(englishLetters, letters) { configureLetter(button, letter) }
-        englishShiftButton.setImage(UIImage(systemName: shift ? "shift.fill" : "shift"), for: .normal)
-        englishShiftButton.accessibilityValue = shift ? "On" : "Off"
+        updateShiftButton()
+    }
+
+    private var shiftSymbol: String {
+        if capsLockDocument != nil { return "capslock.fill" }
+        return shift ? "shift.fill" : "shift"
+    }
+
+    private var shiftValue: String {
+        if capsLockDocument != nil { return "Caps Lock" }
+        return shift ? "On" : "Off"
+    }
+
+    private func updateShiftButton() {
+        englishShiftButton?.setImage(UIImage(systemName: shiftSymbol), for: .normal)
+        englishShiftButton?.accessibilityValue = shiftValue
+    }
+
+    @objc private func tapEnglishShift(_ button: KeyButton, event: UIEvent?) {
+        // UIKit counts consecutive taps on this key. A single tap takes effect immediately.
+        let taps = event?.touches(for: button)?.first?.tapCount ?? 1
+        setEnglishShift(lock: taps == 2 && capsLockDocument == nil)
+    }
+
+    private func setEnglishShift(lock: Bool) {
+        let context = HostContext(textDocumentProxy)
+        doubleSpace = DoubleSpaceShortcut()
+        capsLockDocument = lock ? context.document : nil
+        shift = capsLockDocument != nil || !shift
+        manualShiftContext = context
+        refreshEnglishCase()
+        updateSuggestions()
     }
 
     @objc private func showPreview(_ key: KeyButton) {
@@ -466,17 +508,23 @@ final class KeyboardViewController: UIInputViewController {
                         self?.symbolPage = page == 1 ? 2 : 1
                         self?.rebuild()
                     }
+                } else if language == .english {
+                    toggle = KeyButton(title: "Shift", symbol: shiftSymbol, modifier: true)
+                    toggle.addTarget(self, action: #selector(tapEnglishShift(_:event:)), for: .touchUpInside)
+                    toggle.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Toggle Caps Lock") { [weak self] _ in
+                        guard let self else { return false }
+                        self.setEnglishShift(lock: self.capsLockDocument == nil)
+                        return true
+                    }]
+                    toggle.accessibilityValue = shiftValue
+                    englishShiftButton = toggle
                 } else {
                     toggle = command("Shift", symbol: shift ? "shift.fill" : "shift") { [weak self] in
                         guard let self else { return }
                         doubleSpace = DoubleSpaceShortcut()
                         shift.toggle()
-                        if language == .english {
-                            manualShiftContext = HostContext(textDocumentProxy)
-                            refreshEnglishCase()
-                        } else { rebuild() }
+                        rebuild()
                     }
-                    if language == .english { englishShiftButton = toggle }
                     toggle.accessibilityValue = shift ? "On" : "Off"
                 }
                 buttons.insert(toggle, at: 0)
@@ -585,6 +633,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateEmojiLayout() {
         guard let picker = emojiPicker else { return }
         if isSearchingEmoji != picker.isSearching {
+            capsLockDocument = nil
             isSearchingEmoji = picker.isSearching
             pickerBottom?.isActive = false
             let bottom = isSearchingEmoji ? keyArea.topAnchor : board.safeAreaLayoutGuide.bottomAnchor
@@ -610,6 +659,7 @@ final class KeyboardViewController: UIInputViewController {
         isSearchingEmoji = false
         keyArea.isHidden = false
         if wasSearching {
+            capsLockDocument = nil
             manualShiftContext = nil
             symbolPage = nil
             shift = language == .english && englishShift(for: HostContext(textDocumentProxy))
@@ -827,7 +877,8 @@ final class KeyboardViewController: UIInputViewController {
         guard wordSuggestions, emojiPicker == nil, cursorDrag == nil else { clearSuggestions(); return }
         let context = suggestionContext
         let mode = language
-        let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
+        let allCaps = (capsLockDocument != nil && capsLockDocument == context.document)
+            || (autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters)
         guard context.document != nil,
               mode != .english || (allowsEnglishWordEdits && !deferredSpace.applies(at: context))
         else { clearSuggestions(); return }
@@ -885,7 +936,7 @@ final class KeyboardViewController: UIInputViewController {
         button.visualInsets = UIEdgeInsets(top: contentTopInset, left: 0, bottom: keyArea.spacing, right: 0)
         button.accessibilityIdentifier = "completion." + candidate.title
         button.setTitle(candidate.title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 14)
+        button.titleLabel?.font = .systemFont(ofSize: mode == .burmese ? 16 : 17)
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.tintColor = KeyColors.ink
         button.addAction(UIAction { [weak self, weak button] _ in
