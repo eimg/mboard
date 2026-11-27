@@ -34,7 +34,7 @@ Open the MBoard app to practice typing and read the Myanmar setup instructions. 
 - Tap the smiley key to scroll through emoji. Tap the search field to type a query, or touch and hold an emoji to see its available skin tones.
 - Tap the settings gear in the top-right corner for **Auto-Capitalization**, **Word Suggestions**, and **System**, **Light**, or **Dark** appearance. Both typing switches start on. In ordinary text fields, English words in a Burmese sentence start with a capital, as in **ဒီမှာ App Store ကိုဖွင့်ပါ**.
 - Double-tap Space after a word to insert a period and a space in English, or ။ and a space in Burmese. Tap **123** or **၁၂၃** to open symbols. You can enter several digits or symbols, then press Space to return to letters.
-- Select text and tap Backspace once to delete the whole selection.
+- Hold Space until the keys dim, then drag left or right to move the cursor. Select text and tap Backspace once to delete the whole selection.
 
 Typing, suggestions, and emoji search work on your device with **Full Access** off. iOS uses its system keyboard in secure fields and in apps that require it.
 

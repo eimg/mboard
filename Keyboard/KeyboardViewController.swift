@@ -61,6 +61,32 @@ private final class EnglishWordCompletions {
     }
 }
 
+private final class SuggestionButton: UIButton {
+    var visualInsets = UIEdgeInsets.zero
+    var afterTracking: (() -> Void)?
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        super.endTracking(touch, with: event)
+        finishTracking()
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        super.cancelTracking(with: event)
+        finishTracking()
+    }
+
+    private func finishTracking() {
+        guard let afterTracking else { return }
+        self.afterTracking = nil
+        DispatchQueue.main.async { afterTracking() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        titleLabel?.center.y = bounds.inset(by: visualInsets).midY
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private let board = UIView()
     private let contentTopInset: CGFloat = 7
@@ -69,6 +95,7 @@ final class KeyboardViewController: UIInputViewController {
     private let toolbar = UIStackView()
     private let rows = UIStackView()
     private let candidates = UIStackView()
+    private weak var highlightedSuggestion: UIButton?
     private let settingsButton = UIButton(type: .system)
     private var height: NSLayoutConstraint?
     private var keyAreaTop: NSLayoutConstraint?
@@ -93,6 +120,12 @@ final class KeyboardViewController: UIInputViewController {
     private var recentEmoji = [EmojiItem]()
     private let keyPopup = KeyPopup()
     private var repeatingDelete: Timer?
+    private struct SuggestionRequest: Equatable {
+        let context: HostContext
+        let language: Language
+        let allCaps: Bool
+    }
+    private var suggestionRequest: SuggestionRequest?
     private var lookup: Task<Void, Never>?
     private lazy var englishCompletions = EnglishWordCompletions()
     private var previousSwitchRequirement: Bool?
@@ -151,9 +184,20 @@ final class KeyboardViewController: UIInputViewController {
         brand.isUserInteractionEnabled = false
         brand.addSubview(mark)
         toolbar.addArrangedSubview(brand)
-        toolbar.addArrangedSubview(candidates)
+        // The toolbar spacer fixes the label columns. The actual buttons include the
+        // empty strips above and below the bar, up to the first row of typing keys.
+        let suggestionSlot = UIView()
+        suggestionSlot.isUserInteractionEnabled = false
+        toolbar.addArrangedSubview(suggestionSlot)
         toolbar.addArrangedSubview(settingsButton)
+        candidates.translatesAutoresizingMaskIntoConstraints = false
+        candidates.isHidden = true
+        board.addSubview(candidates)
         NSLayoutConstraint.activate([
+            candidates.leadingAnchor.constraint(equalTo: suggestionSlot.leadingAnchor),
+            candidates.trailingAnchor.constraint(equalTo: suggestionSlot.trailingAnchor),
+            candidates.topAnchor.constraint(equalTo: toolbar.topAnchor, constant: -contentTopInset),
+            candidates.bottomAnchor.constraint(equalTo: rows.topAnchor),
             brand.widthAnchor.constraint(equalToConstant: 36),
             mark.centerXAnchor.constraint(equalTo: brand.centerXAnchor),
             mark.centerYAnchor.constraint(equalTo: brand.centerYAnchor),
@@ -176,6 +220,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillAppear(animated)
         manualShiftContext = nil
         updateEnglishShift()
+        updateSuggestions()
     }
 
     override func viewWillLayoutSubviews() {
@@ -203,7 +248,7 @@ final class KeyboardViewController: UIInputViewController {
         closeEmoji()
         finishComposition()
         cancelGestures()
-        lookup?.cancel()
+        clearSuggestions()
     }
 
     private func configureAppearance() {
@@ -235,6 +280,7 @@ final class KeyboardViewController: UIInputViewController {
             UserDefaults.standard.set(autoCapitalize, forKey: "autoCapitalize")
             manualShiftContext = nil
             updateEnglishShift()
+            updateSuggestions()
             configureSettingsMenu()
         }
         let suggestions = UIAction(title: "Word Suggestions", state: wordSuggestions ? .on : .off) { [weak self] _ in
@@ -247,7 +293,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         let clear = UIAction(title: "Clear for Both Languages", attributes: .destructive) { [weak self] _ in
             LearnedWordStore.shared.clear()
-            self?.updateSuggestions()
+            self?.updateSuggestions(force: true)
         }
         let learned = UIMenu(title: "Clear Learned Words", children: [clear])
         settingsButton.menu = UIMenu(children: [UIMenu(title: "Typing", options: .displayInline,
@@ -297,6 +343,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func cancelGestures() {
+        highlightedSuggestion?.removeFromSuperview()
         cursorDrag = nil
         rows.alpha = 1
         keyPopup.dismiss()
@@ -713,7 +760,9 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func accept(_ candidate: Completion, context: HostContext) {
+    private func accept(_ candidate: Completion, context: HostContext, from button: UIButton) {
+        // Updating the editor can immediately remove the tapped button.
+        let slot = button.convert(button.bounds, to: board)
         deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         finishComposition()
@@ -729,30 +778,71 @@ final class KeyboardViewController: UIInputViewController {
                 return
             }
         }
-        if !candidate.title.contains(" ") {
-            LearnedWordStore.shared.record(candidate.title, language: language)
-        }
-        if language == .english, allowsEnglishWordEdits, symbolPage == nil {
-            deferredSpace.remember(HostContext(textDocumentProxy), accepted: candidate.title)
+        let result = HostContext(textDocumentProxy)
+        let accepted = candidate.confirmed(from: context, to: result)
+        if accepted {
+            if !candidate.title.contains(" ") {
+                LearnedWordStore.shared.record(candidate.title, language: language)
+            }
+            if language == .english, allowsEnglishWordEdits, symbolPage == nil {
+                deferredSpace.remember(result, accepted: candidate.title)
+            }
         }
         didType()
+        if accepted { highlightAcceptedSuggestion(button, in: slot) }
     }
 
-    private func updateSuggestions() {
+    private func highlightAcceptedSuggestion(_ button: UIButton, in slot: CGRect) {
+        guard !slot.isEmpty, let label = button.titleLabel else { return }
+        highlightedSuggestion?.removeFromSuperview()
+        // Reuse the tapped button so even a fitted, long title keeps its exact geometry.
+        button.translatesAutoresizingMaskIntoConstraints = true
+        button.autoresizingMask = []
+        button.frame = slot
+        button.isUserInteractionEnabled = false
+        button.isAccessibilityElement = false
+        button.accessibilityElementsHidden = true
+        board.addSubview(button)
+        button.layoutIfNeeded()
+        let fill = UIView(frame: label.frame.insetBy(dx: -7, dy: -2).intersection(button.bounds))
+        fill.backgroundColor = .secondarySystemFill
+        fill.layer.cornerRadius = 5
+        fill.layer.cornerCurve = .continuous
+        button.insertSubview(fill, at: 0)
+        highlightedSuggestion = button
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { [weak button] in
+            button?.removeFromSuperview()
+        }
+    }
+
+    private func clearSuggestions() {
         lookup?.cancel()
+        lookup = nil
+        suggestionRequest = nil
+        candidates.isHidden = true
         candidates.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        guard wordSuggestions, emojiPicker == nil, cursorDrag == nil else { return }
+    }
+
+    private func updateSuggestions(force: Bool = false) {
+        guard wordSuggestions, emojiPicker == nil, cursorDrag == nil else { clearSuggestions(); return }
         let context = suggestionContext
-        guard context.document != nil else { return }
+        let mode = language
+        let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
+        guard context.document != nil,
+              mode != .english || (allowsEnglishWordEdits && !deferredSpace.applies(at: context))
+        else { clearSuggestions(); return }
+        let request = SuggestionRequest(context: context, language: mode, allCaps: allCaps)
+        // UIKit often reports the same edit through multiple delegate callbacks.
+        // Keep the visible controls and any touch or menu they're already tracking.
+        guard force || request != suggestionRequest else { return }
+        clearSuggestions()
+        suggestionRequest = request
         let before = context.before ?? "", after = context.after ?? ""
         let selected = context.selection ?? ""
-        let mode = language
         let token = mode == .english ? EnglishToken(before: before, after: after) : nil
         if mode == .english {
-            guard allowsEnglishWordEdits, token != nil, selected.isEmpty,
-                  !deferredSpace.applies(at: context) else { return }
+            guard token != nil, selected.isEmpty else { return }
         } else if before.isEmpty && selected.isEmpty { return }
-        let allCaps = autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters
         let immediate = token.flatMap { Completions.joinedPhrase(for: $0, allCaps: allCaps) }
         if let immediate { addSuggestion(immediate, context: context, language: mode) }
         lookup = Task { [weak self] in
@@ -771,34 +861,47 @@ final class KeyboardViewController: UIInputViewController {
                 return Completions.matches(before: String(before.unicodeScalars.suffix(96)),
                                            after: after, language: mode, learned: learned)
             }.value
-            guard !Task.isCancelled, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
-                  self.suggestionContext == context else { return }
-            for candidate in results where candidate != immediate {
-                self.addSuggestion(candidate, context: context, language: mode)
+            guard !Task.isCancelled, self.suggestionRequest == request, self.suggestionContext == context else { return }
+            let additional = results.filter { $0 != immediate }
+            guard !additional.isEmpty else { return }
+            let display = { [weak self] in
+                guard let self, self.suggestionRequest == request, self.suggestionContext == context else { return }
+                for candidate in additional { self.addSuggestion(candidate, context: context, language: mode) }
+            }
+            if let first = self.candidates.arrangedSubviews.first as? SuggestionButton, first.isTracking {
+                // Adding columns changes the button's width. Finish the current tap first.
+                first.afterTracking = display
+            } else {
+                display()
             }
         }
     }
 
     private func addSuggestion(_ candidate: Completion, context: HostContext, language mode: Language) {
-        let button = UIButton(type: .system)
+        let button = SuggestionButton(type: .system)
+        // In System appearance, fully transparent pixels can pass through the
+        // remote keyboard surface before UIKit hit-tests this button.
+        button.backgroundColor = UIColor(white: 0.5, alpha: 0.015)
+        button.visualInsets = UIEdgeInsets(top: contentTopInset, left: 0, bottom: keyArea.spacing, right: 0)
         button.accessibilityIdentifier = "completion." + candidate.title
         button.setTitle(candidate.title, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 14)
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.tintColor = KeyColors.ink
-        button.addAction(UIAction { [weak self] _ in
-            guard let self, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
+        button.addAction(UIAction { [weak self, weak button] _ in
+            guard let self, let button, self.wordSuggestions, self.emojiPicker == nil, self.language == mode,
                   self.suggestionContext == context else { return }
-            self.accept(candidate, context: context)
+            self.accept(candidate, context: context, from: button)
         }, for: .touchUpInside)
         if candidate.learned {
             let forget = UIAction(title: "Forget This Suggestion", attributes: .destructive) { [weak self] _ in
                 LearnedWordStore.shared.forget(candidate.title, language: mode)
-                self?.updateSuggestions()
+                self?.updateSuggestions(force: true)
             }
             button.menu = UIMenu(children: [forget])
         }
         candidates.addArrangedSubview(button)
+        candidates.isHidden = false
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {

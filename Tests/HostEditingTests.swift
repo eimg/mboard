@@ -76,11 +76,47 @@ final class HostEditingTests: XCTestCase {
     }
 
     @MainActor func testEnglishCorrectionRestoresTextWhenHostRejectsInsertion() async throws {
-        let host = EditingHost("go ba", right: "d!")
-        host.rejectedInput = "e"
-        let token = try XCTUnwrap(EnglishToken(before: host.left, after: host.right))
-        XCTAssertFalse(token.replace(with: "bed", at: host.context, in: host))
-        XCTAssertEqual(host.text, "go bad!")
+        for (left, right, target, rejected) in [("go ba", "d!", "bed", "e"),
+                                                ("go aab", "!", "aaa", "a")] {
+            let host = EditingHost(left, right: right)
+            host.rejectedInput = rejected
+            let token = try XCTUnwrap(EnglishToken(before: host.left, after: host.right))
+            XCTAssertFalse(token.replace(with: target, at: host.context, in: host))
+            XCTAssertEqual(host.left, left)
+            XCTAssertEqual(host.right, right)
+            XCTAssertEqual(host.deletions, 0)
+        }
+    }
+
+    @MainActor func testReplacementCanBeLongerThanTheVisibleHostContext() async throws {
+        let host = EditingHost("go bad", right: "!")
+        host.limit = 3
+        let token = try XCTUnwrap(EnglishToken(before: host.context.before ?? "", after: "!"))
+        XCTAssertTrue(token.replace(with: "better", at: host.context, in: host))
+        XCTAssertEqual(host.left, "go better")
+        XCTAssertEqual(host.right, "!")
+    }
+
+    func testSuggestionConfirmationRequiresTheExpectedHostEdit() throws {
+        let document = UUID()
+        func context(_ left: String?, _ right: String?, _ selected: String? = nil) -> HostContext {
+            HostContext(document: document, before: left, after: right, selection: selected)
+        }
+        let hello = Completion(title: "hello", suffix: "lo")
+        let prefix = context("say hel", "!")
+        XCTAssertTrue(hello.confirmed(from: prefix, to: context("ello", "!")))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: prefix))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: context("odd hello", "!")))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: context("say hello", "?")))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: context(nil, "!")))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: context("say hello", "!", "x")))
+        XCTAssertFalse(hello.confirmed(from: prefix, to: HostContext(document: UUID(), before: "say hello", after: "!", selection: nil)))
+
+        let token = try XCTUnwrap(EnglishToken(before: "say he", after: "lo!"))
+        let correction = Completion(title: "hello", suffix: "", action: .replace(token))
+        XCTAssertTrue(correction.confirmed(from: context("say he", "lo!"), to: context("say hello", "!")))
+        let selection = Completion(title: "ကျောင်း", suffix: "", action: .selection)
+        XCTAssertTrue(selection.confirmed(from: context("သူ", "မှာ", "ကျော"), to: context("သူကျောင်း", "မှာ")))
     }
 
     @MainActor func testVowelOrdersWithSlidingAndDisappearingContext() async {

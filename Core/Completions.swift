@@ -6,6 +6,33 @@ struct Completion: Equatable {
     var learned = false
     enum Action: Equatable { case append, replace(EnglishToken), selection }
     var action = Action.append
+
+    func confirmed(from original: HostContext, to result: HostContext) -> Bool {
+        guard result != original, let visible = result.before, !visible.isEmpty else { return false }
+        let before = original.before ?? "", after = original.after ?? ""
+        switch action {
+        case .append:
+            return result.matchesCaret(in: original, before: before + suffix, after: after)
+        case .selection:
+            return result.matchesCaret(in: original, before: before + title, after: after)
+        case .replace(let token):
+            return result.matchesCaret(in: original, before: before.dropLast(token.left.count) + title,
+                                       after: String(after.dropFirst(token.right.count)))
+        }
+    }
+}
+
+private extension HostContext {
+    // A host may expose a sliding window on either side of the caret.
+    func matchesCaret(in original: HostContext, before expectedLeft: String, after expectedRight: String) -> Bool {
+        guard original.document != nil, document == original.document, selection?.isEmpty != false else { return false }
+        let left = (before ?? "").utf8, right = (after ?? "").utf8
+        let leftCount = min(left.count, expectedLeft.utf8.count)
+        let rightCount = min(right.count, expectedRight.utf8.count)
+        return left.isEmpty == expectedLeft.isEmpty && right.isEmpty == expectedRight.isEmpty
+            && left.suffix(leftCount).elementsEqual(expectedLeft.utf8.suffix(leftCount))
+            && right.prefix(rightCount).elementsEqual(expectedRight.utf8.prefix(rightCount))
+    }
 }
 
 /// Both segments contain only English letters and internal apostrophes. Keeping the
@@ -50,38 +77,42 @@ struct EnglishToken: Equatable {
         let old = word.dropFirst(shared), new = target.dropFirst(shared)
         let tail = zip(old.reversed(), new.reversed()).prefix { $0 == $1 }.count
         let untouched = String(old.suffix(tail))
-        let move = right.utf16.count - untouched.utf16.count
-        if move != 0 {
-            host.moveCaret(byUTF16: move)
-            let current = host.context
-            let expectedLeft = (original.before ?? "").dropLast(left.count) + word.dropLast(tail)
-            let expectedRight = untouched + (original.after ?? "").dropFirst(right.count)
-            let actualLeft = current.before ?? "", actualRight = current.after ?? ""
-            func agrees(_ actual: String, _ expected: String) -> Bool {
-                if actual.isEmpty || expected.isEmpty { return actual == expected }
-                return actual.hasSuffix(expected) || expected.hasSuffix(actual)
-            }
-            guard current.document == original.document, current.selection?.isEmpty != false,
-                  agrees(actualLeft, String(expectedLeft)),
-                  agrees(String(actualRight.reversed()), String(expectedRight.reversed())),
-                  actualLeft.hasSuffix(old.dropLast(tail)), actualRight.hasPrefix(untouched)
-            else { return false }
-        }
         let removed = String(old.dropLast(tail))
-        for _ in removed { host.deleteBackward() }
-        let insert = String(new.dropLast(tail))
-        if !insert.isEmpty {
-            let beforeInsertion = host.context
-            host.insert(insert)
-            // If a filtering host declines this insertion, restore the original
-            // fragment only while the same document and caret still own the edit.
-            if host.context == beforeInsertion, beforeInsertion.before?.hasSuffix(insert) != true {
-                if !removed.isEmpty { host.insert(removed) }
+        let inserted = String(new.dropLast(tail))
+        let prefix = String((original.before ?? "").dropLast(left.count)) + word.prefix(shared)
+        let remaining = untouched + (original.after ?? "").dropFirst(right.count)
+        let move = right.utf16.count - untouched.utf16.count
+        if move != 0 { host.moveCaret(byUTF16: move) }
+        let start = host.context
+        guard start.matchesCaret(in: original, before: prefix + removed, after: remaining),
+              (start.before ?? "").hasSuffix(removed) else { return false }
+
+        // A filtering field can reject a suggestion. Insert first so a rejection
+        // leaves the original text intact, even if the preceding letters repeat.
+        if !inserted.isEmpty {
+            host.insert(inserted)
+            let staged = host.context
+            if staged == start {
+                if move != 0 { host.moveCaret(byUTF16: -move) }
                 return false
             }
+            guard staged.matchesCaret(in: original, before: prefix + removed + inserted, after: remaining)
+            else { return false }
+            if !removed.isEmpty { host.moveCaret(byUTF16: -inserted.utf16.count) }
         }
-        if !untouched.isEmpty { host.moveCaret(byUTF16: untouched.utf16.count) }
-        return true
+
+        var oldFragment = removed[...]
+        while !oldFragment.isEmpty {
+            let current = host.context
+            guard current.matchesCaret(in: original, before: prefix + oldFragment, after: inserted + remaining),
+                  current.before?.hasSuffix(oldFragment) == true else { return false }
+            host.deleteBackward()
+            oldFragment.removeLast()
+        }
+        let advance = untouched.utf16.count + (removed.isEmpty ? 0 : inserted.utf16.count)
+        if advance != 0 { host.moveCaret(byUTF16: advance) }
+        return host.context.matchesCaret(in: original, before: prefix + inserted + untouched,
+                                         after: String((original.after ?? "").dropFirst(right.count)))
     }
 }
 

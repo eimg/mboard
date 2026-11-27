@@ -91,7 +91,8 @@ final class TypingTests: XCTestCase {
         tapKey("e")
         let hello = app.buttons["completion.Hello"]
         XCTAssertTrue(hello.waitForExistence(timeout: 3))
-        hello.tap()
+        XCTAssertGreaterThanOrEqual(hello.frame.height, 44)
+        hello.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
         let mixedText = "ကျောင် Hello"
         XCTAssertEqual(field.value as? String, mixedText)
 
