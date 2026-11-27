@@ -18,7 +18,7 @@ Draft for MBoard 0.1. The listing and reviewer steps describe the revised bottom
 
 Type Burmese and English on your iPhone or iPad. Switch languages with one tap. Double-tap Space after a word to add the sentence ending for that language. To type ကို, enter က and then the two vowels in either order. You can also type ေ before its consonant, hold a key for alternate characters, and tap a suggestion to complete a Burmese word without adding a space.
 
-MBoard remembers the suggestions you choose on this device. Hold a learned suggestion to forget it, or clear all your choices in keyboard settings. Search emoji with English or Burmese keywords and hold an emoji to see its available skin tones.
+MBoard remembers suggestions you choose and English words you repeatedly type on this device. The top suggestion stays in the center and can reflect the preceding English word. Hold a learned suggestion to forget it, or clear all your choices in keyboard settings. Search emoji with English or Burmese keywords and hold an emoji to see its available skin tones.
 
 Select text and tap Backspace once to delete the selection. English auto-capitalization follows the text field and can be turned off in keyboard settings.
 
@@ -33,7 +33,7 @@ Choose System, Light, or Dark appearance. The companion app includes a practice 
 
 ## Privacy and compliance answers
 
-- **App Privacy** — The keyboard checks text on both sides of the caret to order Burmese marks and avoid completing a word twice. This context stays in memory. Only explicit suggestion choices contribute to the locally stored ranking. Proposed answer to whether the app or its partners collect data through the app is **No**. Tracking is off. Email initiated separately by the user is covered in the policy. Recheck disclosures if adding analytics, accounts, or remote suggestions. [Apple’s privacy definitions](https://developer.apple.com/app-store/app-privacy-details/)
+- **App Privacy** — The keyboard checks text on both sides of the caret to order Burmese marks and avoid completing a word twice. This context stays in memory. The local ranking stores confirmed picks, English word usage and bounded preceding-word associations. Proposed answer to whether the app or its partners collect data through the app is **No**. Tracking is off. Email initiated separately by the user is covered in the policy. Recheck disclosures if adding analytics, accounts, or remote suggestions. [Apple’s privacy definitions](https://developer.apple.com/app-store/app-privacy-details/)
 - **Privacy manifests** — The app and extension each bundle a manifest. The extension declares UserDefaults reason CA92.1 for settings and ranking history in its private container. [Apple’s required-reason guidance](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api)
 - **Export compliance** — The app sets `ITSAppUsesNonExemptEncryption` to false. The current app has no custom cryptography or bundled encryption libraries.
 - **Content rights** — The binary bundles Unicode/CLDR emoji data and ICU Burmese word data with their notices. Development reference images are outside the app bundle. [Third-party notices](../THIRD_PARTY_NOTICES.md)

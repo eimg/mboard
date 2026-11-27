@@ -1,25 +1,26 @@
 # MBoard privacy policy
 
-Effective November 26, 2026. This policy covers the MBoard practice app and keyboard extension on iPhone and iPad.
+Effective November 27, 2026. This policy covers the MBoard practice app and keyboard extension on iPhone and iPad.
 
 MBoard processes typing, suggestions, and emoji searches on the device. The keyboard extension does not request Full Access. MBoard has no accounts, analytics, or service that receives keystrokes.
 
 ## What the keyboard remembers
 
 - The extension saves the selected language, appearance, and typing switches in its own preferences.
-- Tapping a completion can save the chosen word, its language, a ranking weight, and the time of selection. MBoard keeps up to 256 choices across both languages. Their influence on ranking fades over time.
-- The keyboard reads nearby text from the active field to compose Burmese, determine capitalization, and find completions. It does not save a transcript or learn words from ordinary typing. Recent emoji stay in memory for the keyboard session.
+- With **Word Suggestions** on, MBoard remembers suggestions you tap and English words you finish typing on its keys. It keeps up to 256 word records across both languages, including spelling, capitalization, usage counts, a ranking weight and the time of the latest use. Recent use carries more weight.
+- An English word can have up to six associated preceding words and their weights. For example, repeatedly typing “good morning” can move “morning” up when you next type “good m”. The keyboard stores these associations locally. It does not save a transcript.
+- The keyboard reads nearby text to compose Burmese, determine capitalization and find suggestions. MBoard skips suggestions and learning on numeric keypads and in fields the app marks for usernames, passwords, verification codes, card numbers, email addresses, URLs or phone numbers. Pasted text and emoji searches do not train the personal vocabulary. Recent emoji stay in memory for the keyboard session.
 
 ## Manage learned choices
 
-Hold a learned suggestion and select **Forget This Suggestion** to remove its personal ranking boost. To remove all learned choices, tap the settings gear at the top right and select **Clear Learned Words → Clear for Both Languages**. A word in the bundled dictionary or Apple’s English completions can still appear after clearing. **Word Suggestions** controls whether the keyboard shows candidates.
+Hold a learned suggestion and select **Forget This Suggestion** to remove its personal record and associated word pairs. To remove all learned choices, tap the settings gear at the top right and select **Clear Learned Words → Clear for Both Languages**. A word in the bundled dictionary or Apple’s English completions can still appear after clearing. **Word Suggestions** can be turned off to stop suggestions and new learning.
 
 The app where you type receives the text you insert and handles that text under its own privacy practices.
 
 
 ## Collection, sharing and retention
 
-MBoard does not transmit, sell or share typed text, learned suggestions, or identifiers. It has no advertising or third-party tracking SDKs. Practice text and emoji search queries are used in memory. Keyboard preferences and learned choices stay in local extension storage until cleared or the app is deleted. Clearing learned words leaves your other keyboard preferences in place.
+MBoard does not transmit, sell or share typed text, learned suggestions, or identifiers. It has no advertising or third-party tracking SDKs. The practice field follows the same keyboard learning settings as an ordinary text field. Emoji searches stay in memory. Keyboard preferences and learned choices stay in local extension storage until cleared or the app is deleted. Clearing learned words leaves your other keyboard preferences in place.
 
 Opening a support or policy link takes you to GitHub in your browser. GitHub handles visits under its own [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). If you email support, the maintainer receives your email address and the information you choose to send, uses them to respond, and retains the correspondence only as needed to handle the request. Please use invented text in examples.
 

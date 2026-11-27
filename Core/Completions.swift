@@ -4,13 +4,17 @@ struct Completion: Equatable {
     let title: String
     let suffix: String
     var learned = false
-    enum Action: Equatable { case append, replace(EnglishToken), selection }
+    enum Action: Equatable { case append, replace(EnglishToken), selection, keep }
     var action = Action.append
 
     func confirmed(from original: HostContext, to result: HostContext) -> Bool {
-        guard result != original, let visible = result.before, !visible.isEmpty else { return false }
+        guard let visible = result.before, !visible.isEmpty, result != original || action == .keep else { return false }
         let before = original.before ?? "", after = original.after ?? ""
         switch action {
+        case .keep:
+            guard result == original, original.document != nil, original.selection?.isEmpty != false,
+                  let token = EnglishToken(before: before, after: after) else { return false }
+            return token.left == title && token.right.isEmpty
         case .append:
             return result.matchesCaret(in: original, before: before + suffix, after: after)
         case .selection:
@@ -48,8 +52,25 @@ struct EnglishToken: Equatable {
 
     static func part(_ c: Character) -> Bool { isLetter(c) || c == "'" || c == "’" }
 
+    func previousWord(in before: String) -> String? {
+        let prefix = before.dropLast(left.count)
+        guard prefix.last == " " else { return nil }
+        let window = prefix.reversed().prefix(97)
+        let spaces = window.prefix { $0 == " " }.count
+        let previous = window.dropFirst(spaces).prefix(while: { !$0.isWhitespace })
+        guard spaces + previous.count < 97 else { return nil }
+        let word = String(previous.reversed())
+        guard let token = EnglishToken(before: word, after: ""), token.word == word else { return nil }
+        return word
+    }
+
     init?(before: String, after: String) {
-        let nearby = String(before.reversed().prefix { !$0.isWhitespace }.reversed()) + after.prefix { !$0.isWhitespace }
+        // Reject an unbroken run beyond our inspection window. Truncating and
+        // matching its tail could treat part of an address as a standalone word.
+        let leftRun = before.reversed().prefix(97).prefix { !$0.isWhitespace }
+        let rightRun = after.prefix(97).prefix { !$0.isWhitespace }
+        guard leftRun.count < 97, rightRun.count < 97 else { return nil }
+        let nearby = String(leftRun.reversed()) + rightRun
         guard !nearby.contains(where: { "@#/_".contains($0) || $0.isNumber }),
               !nearby.contains("://"),
               !zip(nearby, nearby.dropFirst()).contains(where: { $0 == "." && Self.isLetter($1) })
@@ -57,6 +78,8 @@ struct EnglishToken: Equatable {
         var leading = String(before.reversed().prefix(while: Self.part).reversed())
         var trailing = String(after.prefix(while: Self.part))
         // Opening and closing quotes belong to the surrounding sentence.
+        if trailing.isEmpty, let last = leading.last, last == "'" || last == "’",
+           leftRun.contains("‘") || leading.first == "'" { return nil }
         while let first = leading.first, !Self.isLetter(first) { leading.removeFirst() }
         while let last = trailing.last, !Self.isLetter(last) { trailing.removeLast() }
         guard let first = (leading + trailing).first, Self.isLetter(first),
@@ -138,6 +161,90 @@ struct DeferredEnglishSpace {
     }
 }
 
+/// Owns only a contiguous run of verified key insertions. A separator stages
+/// the word until the next input so deleting it immediately cancels learning.
+struct EnglishTypingHistory {
+    struct Entry {
+        let word: String
+        let previous: String?
+        let intentionalCase: Bool
+    }
+    private var anchor: HostContext?
+    private var current: Entry?
+    private var picked = false
+    private var separator: Character?
+    var awaitsSettlement: Bool { current != nil && separator != nil && separator != "." && separator != ":" && !picked }
+
+    mutating func settled(at context: HostContext) -> Entry? {
+        guard anchor == context, awaitsSettlement else { return nil }
+        picked = true // Already counted. Keep the boundary for the next word.
+        return current
+    }
+
+    mutating func finish() -> Entry? {
+        defer { self = Self() }
+        return separator != nil && !picked ? current : nil
+    }
+
+    mutating func observe(_ context: HostContext) {
+        if anchor != context { self = Self() }
+    }
+
+    mutating func accepted(_ word: String, from before: HostContext, to after: HostContext) -> String? {
+        observe(before)
+        let previous = current?.previous
+        current = Entry(word: word, previous: previous, intentionalCase: false)
+        picked = true
+        separator = nil
+        anchor = after
+        return previous
+    }
+
+    mutating func deleted(from before: HostContext, to after: HostContext) {
+        observe(before)
+        guard let entry = current, let old = before.before, !old.isEmpty,
+              after.matchesCaret(in: before, before: String(old.dropLast()), after: before.after ?? "")
+        else { self = Self(); return }
+        anchor = after
+        if separator != nil { separator = nil; return }
+        let shorter = String(entry.word.dropLast())
+        current = shorter.isEmpty ? nil : Entry(word: shorter, previous: entry.previous, intentionalCase: entry.intentionalCase)
+        picked = false
+    }
+
+    mutating func inserted(_ text: String, from before: HostContext, to after: HostContext,
+                           automaticInitial: Bool = false) -> Entry? {
+        observe(before)
+        guard before != after, before.selection?.isEmpty != false,
+              after.matchesCaret(in: before, before: (before.before ?? "") + text, after: before.after ?? ""),
+              let key = text.last else { self = Self(); return nil }
+        let deferred = picked && text.count == 2 && text.first == " " && EnglishToken.isLetter(key)
+        guard text.count == 1 || deferred else { self = Self(); return nil }
+        if deferred { separator = " " }
+        let boundary = separator
+        let previous = boundary == " " ? current?.word : nil
+        var completed: Entry?
+        if let boundary {
+            // A period followed directly by a letter may be part of an address.
+            if (boundary != "." && boundary != ":") || key.isWhitespace { completed = finish() }
+            else { self = Self() }
+        }
+        anchor = after
+        if EnglishToken.part(key) {
+            let word = (current?.word ?? "") + String(key)
+            guard let token = EnglishToken(before: after.before ?? "", after: after.after ?? ""),
+                  token.right.isEmpty, token.left == word else { self = Self(); return completed }
+            current = Entry(word: word, previous: current?.previous ?? previous,
+                            intentionalCase: current?.intentionalCase ?? !automaticInitial)
+            picked = false
+        } else if let entry = current, let last = entry.word.last, EnglishToken.isLetter(last),
+                  key.isWhitespace || ".,!?;:".contains(key) {
+            separator = key
+        } else { self = Self() }
+        return completed
+    }
+}
+
 enum Completions {
     // A short allowlist also works without an installed English spelling dictionary.
     private static let joinedPhrases = [
@@ -176,7 +283,7 @@ enum Completions {
     }
 
     static func englishSuggestions(_ token: EnglishToken, apple: [String], guesses: [String],
-                                   learned: [String], allCaps: Bool) -> [Completion] {
+                                   learned: [String], allCaps: Bool, personalCase: [String: String] = [:]) -> [Completion] {
         let source = token.word
         var choices: [Completion] = []
         var seen = Set([key(source)])
@@ -193,27 +300,94 @@ enum Completions {
             let boundary = phrase.distance(from: phrase.startIndex, to: space)
             offer(String(source.prefix(boundary)) + " " + source.dropFirst(boundary))
         }
-        if !token.right.isEmpty && key(source) == "helo" { offer("hello") }
         if let phrase = joinedPhrase(for: token, allCaps: allCaps) {
             choices.append(phrase)
             seen.insert(key(phrase.title))
         }
+        let literal = key(source)
+        let learnedWord = learned.first { key($0) == literal }
+        let known = learnedWord != nil
+        let preferredCase = personalCase[literal]
+        let sameSpelling = (preferredCase ?? learnedWord) == source
+        let contraction = contractions[literal]
+        let secondaryContraction = contraction != nil && (ambiguousContractions.contains(literal) || known)
+        // Prefer an established correction over a speculative dictionary split.
+        if !sameSpelling, let correction = commonTypos[literal] { offer(correction) }
+        if let contraction, !secondaryContraction { offer(contraction) }
+        if known, !allCaps, source == source.lowercased(), let spelling = preferredCase,
+           spelling != source, spelling.caseInsensitiveCompare(source) == .orderedSame {
+            choices.append(Completion(title: spelling, suffix: "", learned: true, action: .replace(token)))
+        }
         // A spelling dictionary may itself propose a missed space. Accept only
         // splits which preserve every typed letter and introduce one space.
-        for guess in guesses where choices.isEmpty {
+        for guess in guesses where choices.isEmpty && !known && contraction == nil {
             let parts = guess.components(separatedBy: " ")
             if parts.count == 2, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isLetter) }),
                key(parts.joined()) == key(source) { offerSplit(guess) }
         }
-        if !token.right.isEmpty {
-            for guess in guesses where guess.allSatisfy({ $0.isLetter || $0 == "'" || $0 == "’" }) {
-                offer(guess)
+        let spellings = guesses.filter { !$0.isEmpty && $0.allSatisfy(EnglishToken.part) && key($0) != literal }
+        if token.right.isEmpty {
+            let extensionsOfPrefix = spellings.filter { key($0).hasPrefix(literal) }
+            let completions = matches(before: source, language: .english, apple: apple + extensionsOfPrefix,
+                                      learned: learned, allCaps: allCaps).map {
+                candidate -> Completion in
+                guard candidate.learned, !allCaps, let spelling = personalCase[key(candidate.title)],
+                      source == source.lowercased() || spelling.hasPrefix(source),
+                      spelling.caseInsensitiveCompare(candidate.title) == .orderedSame,
+                      spelling != candidate.title else { return candidate }
+                return Completion(title: spelling, suffix: "", learned: true, action: .replace(token))
+            }
+            let contractionKey = contraction.map(key)
+            let alternatives = known ? [] : spellings.filter { !key($0).hasPrefix(literal) && key($0) != contractionKey }
+            if let swap = alternatives.first(where: { isAdjacentSwap(literal, key($0)) }) { offer(swap) }
+            let slots = alternatives.isEmpty && !secondaryContraction ? 3 : 2
+            for candidate in completions where choices.count < slots && seen.insert(key(candidate.title)).inserted {
+                choices.append(candidate)
+            }
+            if let contraction, secondaryContraction {
+                if choices.isEmpty {
+                    choices.append(Completion(title: source, suffix: "", learned: known, action: .keep))
+                }
+                offer(contraction)
+            }
+            for guess in alternatives { offer(guess) }
+            for candidate in completions where choices.count < 3 && seen.insert(key(candidate.title)).inserted {
+                choices.append(candidate)
             }
         } else {
-            let completions = matches(before: source, language: .english, apple: apple, learned: learned, allCaps: allCaps)
-            choices += completions.filter { seen.insert(key($0.title)).inserted }.prefix(3 - choices.count)
+            if let contraction, secondaryContraction { offer(contraction) }
+            if !known { for guess in spellings { offer(guess) } }
         }
         return choices
+    }
+
+    private static let commonTypos = ["teh": "the", "helo": "hello", "thier": "their",
+                                      "recieve": "receive", "adn": "and", "becuase": "because"]
+
+    // Removing one apostrophe gives an exact lookup, even if UIKit considers
+    // the typed form valid or the installed spelling dictionary is unavailable.
+    private static let contractions = Dictionary(uniqueKeysWithValues: """
+        I'm I've I'll I'd you're you've you'll you'd we're we've we'll we'd they're they've they'll they'd
+        he's he'll he'd she's she'll she'd it's it'll it'd that's that'll that'd there's there'll there'd
+        what's who's how's let's isn't aren't wasn't weren't don't doesn't didn't can't couldn't won't
+        wouldn't shouldn't haven't hasn't hadn't mustn't needn't could've would've should've might've y'all
+        """.split(whereSeparator: \.isWhitespace).map {
+            (key(String($0)).replacingOccurrences(of: "'", with: ""), String($0))
+        })
+    private static let ambiguousContractions: Set<String> = [
+        "ill", "id", "were", "well", "wed", "hell", "hed", "shell", "shed", "its", "lets", "cant", "wont", "hows", "whats"
+    ]
+
+    static func isCommonEnglishTypo(_ word: String) -> Bool {
+        let spelling = key(word)
+        return commonTypos[spelling] != nil || (contractions[spelling] != nil && !ambiguousContractions.contains(spelling))
+    }
+
+    private static func isAdjacentSwap(_ input: String, _ guess: String) -> Bool {
+        let a = Array(input), b = Array(guess)
+        guard a.count == b.count, let i = a.indices.first(where: { a[$0] != b[$0] }),
+              i + 1 < a.count, a[i] == b[i + 1], a[i + 1] == b[i] else { return false }
+        return a.dropFirst(i + 2).elementsEqual(b.dropFirst(i + 2))
     }
 
     static func selectedBurmese(_ selected: String, learned: [String]) -> [Completion] {
@@ -235,6 +409,9 @@ enum Completions {
     I'll I'm I've I'd don't didn't doesn't can't couldn't won't wouldn't
     you're we're they're that's there's let's isn't aren't wasn't
     """.split(whereSeparator: \.isWhitespace).map(String.init)
+
+    private static let everydayEnglish = Set(english.map(key))
+    static func isEverydayEnglish(_ word: String) -> Bool { everydayEnglish.contains(key(word)) }
 
     // Everyday phrases take precedence over the alphabetical word-break dictionary.
     private static let conversational = """

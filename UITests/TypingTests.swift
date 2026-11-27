@@ -1,12 +1,71 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    private func selectKeyboard(_ language: String, in app: XCUIApplication) {
+        // Remote keyboard buttons can appear after the practice field receives focus.
+        let switches = app.buttons.matching(NSPredicate(format: "label IN %@", ["Switch to English", "Switch to Burmese"]))
+        let globe = app.buttons["Next keyboard"].firstMatch
+        if !switches.firstMatch.waitForExistence(timeout: 3), globe.exists {
+            globe.press(forDuration: 0.8)
+            let mboard = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'MBoard,'")).firstMatch
+            if mboard.waitForExistence(timeout: 2) { mboard.tap() }
+        }
+        XCTAssertTrue(switches.firstMatch.waitForExistence(timeout: 3), "Enable MBoard in the simulator keyboard settings.")
+        let toggle = app.buttons["Switch to " + language]
+        if toggle.exists { toggle.tap() }
+        let destination = language == "English" ? "Burmese" : "English"
+        XCTAssertTrue(app.buttons["Switch to " + destination].waitForExistence(timeout: 3))
+    }
+
+    func testEnglishCorrectionsAndPersonalContextStayCentered() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        func type(_ keys: String) {
+            for key in keys {
+                if key == " " { app.buttons["Space"].tap(); continue }
+                let lower = app.buttons["key." + String(key)]
+                (lower.exists ? lower : app.buttons["key." + key.uppercased()]).tap()
+            }
+        }
+        func centered(_ word: String) -> XCUIElement {
+            let candidate = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "completion." + word)).firstMatch
+            XCTAssertTrue(candidate.waitForExistence(timeout: 4), word)
+            XCTAssertEqual(candidate.frame.midX, field.frame.midX, accuracy: 3)
+            XCTAssertGreaterThanOrEqual(candidate.frame.height, 44)
+            return candidate
+        }
+        type("teh")
+        centered("the").tap()
+        XCTAssertEqual((field.value as? String)?.lowercased(), "the")
+        type(" helo")
+        _ = centered("hello")
+        type(" ")
+        XCTAssertTrue((field.value as? String)?.hasSuffix("helo ") == true)
+
+        // Use a fresh shared prefix so prior simulator history cannot satisfy the assertions.
+        let suffix = String((0..<3).map { _ in "bcdfghjklmnpqrstvwxyz".randomElement()! })
+        let stem = "z" + suffix
+        let first = stem + "a", second = stem + "o"
+        for _ in 0..<3 { type("good " + first + " ") }
+        for _ in 0..<4 { type("nice " + second + " ") }
+        type("good " + stem)
+        centered(first).tap()
+        XCTAssertTrue((field.value as? String)?.hasSuffix("good " + first) == true)
+        type(" nice " + stem)
+        centered(second).tap()
+        XCTAssertTrue((field.value as? String)?.hasSuffix("nice " + second) == true)
+    }
+
     func testEnglishDoubleShiftLocksUntilTheNextShiftTap() {
         let app = XCUIApplication()
         app.launch()
         let field = app.textViews["practice"]
         field.tap()
-        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        selectKeyboard("English", in: app)
         let shift = app.buttons["Shift"]
         shift.doubleTap()
         XCTAssertEqual(shift.value as? String, "Caps Lock")
@@ -20,12 +79,36 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "HI MEaBc")
     }
 
+    func testMissingApostrophesInThePracticeField() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for (keys, title) in [("im", "I'm"), ("dont", "don't")] {
+            for key in keys {
+                let button = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key." + String(key))).firstMatch
+                button.tap()
+            }
+            let correction = app.buttons["completion." + title]
+            XCTAssertTrue(correction.waitForExistence(timeout: 4))
+            XCTAssertEqual(correction.frame.midX, field.frame.midX, accuracy: 3)
+            correction.tap()
+        }
+        XCTAssertEqual(field.value as? String, "I'm don't")
+        for key in "well" { app.buttons["key." + String(key)].tap() }
+        XCTAssertTrue(app.buttons["completion.we'll"].waitForExistence(timeout: 4))
+        app.buttons["Space"].tap()
+        XCTAssertEqual(field.value as? String, "I'm don't well ")
+    }
+
     func testSentenceShortcutsAndSymbolPagesInBothLanguages() {
         let app = XCUIApplication()
         app.launch()
         let field = app.textViews["practice"]
         field.tap()
-        if app.buttons["Switch to Burmese"].exists { app.buttons["Switch to Burmese"].tap() }
+        selectKeyboard("Burmese", in: app)
         app.buttons["key.က"].tap()
         app.buttons["Space"].doubleTap()
         XCTAssertEqual(field.value as? String, "က။ ")
@@ -43,12 +126,26 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "က။ " + letter + ".  12 q")
     }
 
+    func testEmojiReturnKeyFollowsLanguageChangedDuringSearch() {
+        let app = XCUIApplication()
+        app.launch()
+        app.textViews["practice"].tap()
+        selectKeyboard("Burmese", in: app)
+        app.buttons["Emoji"].tap()
+        XCTAssertTrue(app.buttons["Return to Burmese keyboard"].isHittable)
+        app.buttons["emoji.search.query"].tap()
+        app.buttons["Switch to English"].tap()
+        app.buttons["Back"].tap()
+        app.buttons["Return to English keyboard"].tap()
+        XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
+    }
+
     func testEmojiSearchClearsVisibleHostSuggestions() {
         let app = XCUIApplication()
         app.launch()
         let field = app.textViews["practice"]
         field.tap()
-        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        selectKeyboard("English", in: app)
         let lower = app.buttons["key.h"]
         (lower.exists ? lower : app.buttons["key.H"]).tap()
         app.buttons["key.e"].tap()
@@ -68,7 +165,7 @@ final class TypingTests: XCTestCase {
         app.launch()
         let field = app.textViews["practice"]
         field.tap()
-        if app.buttons["Switch to English"].exists { app.buttons["Switch to English"].tap() }
+        selectKeyboard("English", in: app)
         for character in "hi red go" {
             if character == " " { app.buttons["Space"].tap(); continue }
             let lower = app.buttons["key." + String(character)]
@@ -81,7 +178,8 @@ final class TypingTests: XCTestCase {
 
         app.buttons["Switch to Burmese"].tap()
         app.buttons["key.က"].tap()
-        field.typeKey("a", modifierFlags: .command)
+        // Triple-tap the single paragraph to select it through the touch UI.
+        field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertTrue((field.value as? String ?? "").isEmpty)
     }
@@ -97,7 +195,7 @@ final class TypingTests: XCTestCase {
 
         // Enable MBoard in simulator Settings and select it from the globe before the run.
         let englishSwitch = app.buttons["Switch to English"]
-        if app.buttons["Switch to Burmese"].exists { app.buttons["Switch to Burmese"].tap() }
+        selectKeyboard("Burmese", in: app)
         XCTAssertTrue(englishSwitch.waitForExistence(timeout: 5), "Select the enabled MBoard keyboard in this simulator.")
         func tapKey(_ value: String) { app.buttons["key." + value].tap() }
         for key in ["ေ","က","ျ","ာ","င","်","း"] { tapKey(key) }
@@ -115,7 +213,7 @@ final class TypingTests: XCTestCase {
         let mixedText = "ကျောင် Hello"
         XCTAssertEqual(field.value as? String, mixedText)
 
-        let cKey = app.buttons["key.c"]
+        let cKey = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key.c")).firstMatch
         let normalKeyHeight = cKey.frame.height
         app.buttons["Emoji"].tap()
         let search = app.buttons["emoji.search.query"]
@@ -143,7 +241,7 @@ final class TypingTests: XCTestCase {
         app.buttons["Back"].tap()
         XCTAssertTrue(search.isHittable)
         XCTAssertFalse(firstEmoji.isHittable, "Returning from search should restore the scroll position.")
-        app.buttons["ABC"].tap()
+        app.buttons["Return to English keyboard"].tap()
         XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertEqual(field.value as? String, mixedText)

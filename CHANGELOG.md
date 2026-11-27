@@ -9,7 +9,7 @@ This first version brings English and Burmese typing to one keyboard for iPhone 
 - Switch between English QWERTY and a Burmese Unicode layout with shifted keys and long-press alternatives. English auto-capitalization follows the active field and can be turned off.
 - Burmese labels use smaller lettering on the same touch targets. Touch a character key in either language to see an enlarged preview above your finger.
 - Tap one of up to three completions. English uses Apple’s on-device text checker and a bundled vocabulary. Burmese includes everyday phrases and 41,120 dictionary entries. For example, choosing `ကျောင်း` after `သူကျော` produces `သူကျောင်း` and preserves the surrounding text and spacing.
-- Suggestions you choose can move up on later matches. Forget one choice by holding it, or clear both languages’ learned choices from the settings menu under the gear.
+- The top suggestion stays centered. English offers tap-to-apply spelling corrections while typing and learns from repeated words and their preceding words on this device. Suggestions you choose can move up on later matches. Forget one choice by holding it, or clear both languages’ learned choices from the settings menu under the gear.
 - Delete a text selection with one Backspace. At a Burmese insertion point, Backspace can remove one Unicode component at a time.
 - Use the bottom-left abc or ကခ key to switch languages. Double-tap Space after a word for an English or Burmese sentence ending. After typing symbols, Space or Return brings back the letters.
 - Scroll the emoji catalog, search in English or Burmese, and hold an emoji for available skin tones.

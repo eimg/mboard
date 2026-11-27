@@ -201,7 +201,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let stack = UIStackView()
     private let header = UIStackView()
     private let backButton = KeyButton(title: "Back", symbol: "arrow.left")
-    private let lettersButton = KeyButton(title: "ABC", modifier: true)
+    private let lettersButton = KeyButton(title: "", modifier: true)
     private let deleteButton = KeyButton(title: "Delete", symbol: "delete.left")
     private let searchField = UIStackView()
     private let queryButton = EmojiQueryButton()
@@ -209,7 +209,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let heading = UILabel()
     private let grid = EmojiGrid()
 
-    init(recent: [EmojiItem], usesSystemBackground: Bool, topInset: CGFloat) {
+    init(recent: [EmojiItem], language: Language, usesSystemBackground: Bool, topInset: CGFloat) {
         self.recent = recent
         self.usesSystemBackground = usesSystemBackground
         super.init(frame: .zero)
@@ -224,6 +224,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)])
         header.spacing = 4
         configureHeaderButton(backButton) { [weak self] in self?.goBack() }
+        setReturnLanguage(language)
         configureHeaderButton(lettersButton) { [weak self] in self?.onClose?() }
         configureHeaderButton(deleteButton) { [weak self] in self?.onDelete?() }
         header.addArrangedSubview(backButton)
@@ -267,6 +268,13 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
 
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
 
+    func setReturnLanguage(_ language: Language) {
+        let title = language == .english ? "abc" : "ကခ"
+        lettersButton.setTitle(title, for: .normal)
+        lettersButton.titleLabel?.font = KeyButton.labelFont(for: title, size: 16)
+        lettersButton.accessibilityLabel = language == .english ? "Return to English keyboard" : "Return to Burmese keyboard"
+    }
+
     private func configureSearchField() {
         searchField.backgroundColor = .tertiarySystemFill
         searchField.layer.cornerRadius = 10
@@ -279,6 +287,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
 
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "magnifyingglass")
+        configuration.preferredSymbolConfigurationForImage = .init(pointSize: 13, weight: .regular)
         configuration.imagePadding = 7
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 4)
         configuration.titleLineBreakMode = .byTruncatingHead
