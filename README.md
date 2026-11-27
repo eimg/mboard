@@ -10,7 +10,7 @@ MBoard is an offline English and Burmese (မြန်မာ) keyboard for iPhon
   <img src="docs/images/iphone/03-emoji.png" alt="MBoard emoji picker on iPhone" width="31%">
 </p>
 
-**Release status** · Version 0.1 is in development. You can build the app from source for iPhone or iPad running iOS or iPadOS 16 or later, or try it in the simulator.
+**Release status** · Version 0.1 (build 11) has been submitted and is awaiting App Store review. The source and feature descriptions below cover 0.1.1 in development for iOS and iPadOS 16 or later.
 
 ## Build from source
 
@@ -45,6 +45,6 @@ Typing, suggestions, and emoji search work on your device with **Full Access** o
 - [Contributing, running tests, and reporting typing issues](CONTRIBUTING.md)
 - [Privacy and on-device storage](PRIVACY.md)
 - [Support and contact](SUPPORT.md)
-- [App Store preparation](docs/APP_STORE.md)
+- [Product specification](PROJECT_SPEC.md)
 - [Security reporting](SECURITY.md)
 - [MIT license for MBoard’s original code](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md)
