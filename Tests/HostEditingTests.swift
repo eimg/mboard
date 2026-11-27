@@ -119,6 +119,25 @@ final class HostEditingTests: XCTestCase {
         XCTAssertTrue(selection.confirmed(from: context("သူ", "မှာ", "ကျော"), to: context("သူကျောင်း", "မှာ")))
     }
 
+    @MainActor func testDeferredSpaceAfterCorrectionsInBoundedHost() throws {
+        for (input, title) in [("thankyo", "thank you"), ("im", "I'm")] {
+            let host = EditingHost("say " + input)
+            host.limit = input.count
+            let original = host.context
+            let token = try XCTUnwrap(EnglishToken(before: original.before ?? "", after: ""))
+            let candidate = Completion(title: title, suffix: "", action: .replace(token))
+            XCTAssertTrue(token.replace(with: title, at: original, in: host))
+            XCTAssertTrue(candidate.confirmed(from: original, to: host.context))
+            XCTAssertEqual(host.text, "say " + title)
+            var spacing = DeferredEnglishSpace()
+            spacing.remember(host.context, accepted: title)
+            host.limit = 100
+            spacing.observe(host.context)
+            XCTAssertTrue(spacing.consume(before: "f", at: host.context))
+            XCTAssertFalse(spacing.consume(before: "f", at: host.context))
+        }
+    }
+
     @MainActor func testVowelOrdersWithSlidingAndDisappearingContext() async {
         let prefix = String(repeating: "paragraph ", count: 44)
         for excludesMark in [false, true] {

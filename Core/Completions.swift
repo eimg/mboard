@@ -52,6 +52,15 @@ struct EnglishToken: Equatable {
 
     static func part(_ c: Character) -> Bool { isLetter(c) || c == "'" || c == "’" }
 
+    static func standalonePronoun(at context: HostContext, before input: String) -> Self? {
+        guard let left = context.before, left.last == "i", context.document != nil,
+              context.selection?.isEmpty != false, let next = input.first,
+              next.isWhitespace || ".,!?;:’')]}”\"—…၊။".contains(next),
+              let token = Self(before: left, after: context.after ?? ""), token.left == "i",
+              token.right.isEmpty else { return nil }
+        return token
+    }
+
     func previousWord(in before: String) -> String? {
         let prefix = before.dropLast(left.count)
         guard prefix.last == " " else { return nil }
@@ -141,18 +150,35 @@ struct EnglishToken: Equatable {
 
 struct DeferredEnglishSpace {
     private var anchor: HostContext?
+    private var accepted = ""
 
-    mutating func remember(_ context: HostContext, accepted word: String) {
+    mutating func remember(_ context: HostContext, accepted title: String) {
         anchor = nil
-        guard context.document != nil, context.selection?.isEmpty != false,
-              (context.after ?? "").isEmpty, context.before?.hasSuffix(word) == true else { return }
+        accepted = title
+        guard context.document != nil, matchesAcceptedEnd(context) else { return }
         anchor = context
     }
 
-    func applies(at context: HostContext) -> Bool { anchor == context }
+    // A confirmed replacement may be longer than the host's visible text window.
+    private func matchesAcceptedEnd(_ context: HostContext) -> Bool {
+        guard context.selection?.isEmpty != false, (context.after ?? "").isEmpty,
+              let left = context.before, !left.isEmpty, !accepted.isEmpty else { return false }
+        return left.hasSuffix(accepted) || accepted.hasSuffix(left)
+    }
+
+    func applies(at context: HostContext) -> Bool {
+        guard let anchor, anchor.document == context.document, matchesAcceptedEnd(context),
+              let original = anchor.before, let current = context.before else { return false }
+        if original == current { return true }
+        return (accepted.hasSuffix(original) && current.hasSuffix(original))
+            || (accepted.hasSuffix(current) && original.hasSuffix(current))
+    }
 
     mutating func observe(_ context: HostContext) {
-        if anchor != context { anchor = nil }
+        guard applies(at: context) else { anchor = nil; return }
+        if let original = anchor?.before, context.before?.count ?? 0 > original.count {
+            anchor = context
+        }
     }
 
     mutating func consume(before key: String, at context: HostContext) -> Bool {

@@ -150,6 +150,48 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "HI MEaBc")
     }
 
+    func testSpacingAfterAcceptingThankYou() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        func type(_ letters: String) {
+            for letter in letters {
+                app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key." + String(letter))).firstMatch.tap()
+            }
+        }
+        func pickThankYou() {
+            type("thankyo")
+            let phrase = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "completion.thank you")).firstMatch
+            XCTAssertTrue(phrase.waitForExistence(timeout: 3))
+            phrase.tap()
+        }
+        pickThankYou()
+        XCTAssertEqual((field.value as? String)?.lowercased(), "thank you")
+        type("for")
+        XCTAssertEqual((field.value as? String)?.lowercased(), "thank you for")
+        app.buttons["Space"].tap()
+        pickThankYou()
+        app.buttons["key.,"].tap()
+        XCTAssertEqual((field.value as? String)?.lowercased(), "thank you for thank you,")
+    }
+
+    func testCapitalizesStandalonePronounOnSpaceAndPunctuation() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for key in "say i think it is i," {
+            if key == " " { app.buttons["Space"].tap() }
+            else { app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key." + String(key))).firstMatch.tap() }
+        }
+        XCTAssertEqual(field.value as? String, "Say I think it is I,")
+    }
+
     func testMissingApostrophesInThePracticeField() {
         continueAfterFailure = false
         let app = XCUIApplication()

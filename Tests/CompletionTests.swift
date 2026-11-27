@@ -249,6 +249,18 @@ final class CompletionTests: XCTestCase {
         XCTAssertFalse(pending.applies(at: at("hello", ",")))
     }
 
+    func testStandalonePronounAtWordBoundaries() {
+        func qualifies(_ left: String, _ input: String, right: String = "", selection: String? = nil) -> Bool {
+            let context = HostContext(document: UUID(), before: left, after: right, selection: selection)
+            return EnglishToken.standalonePronoun(at: context, before: input) != nil
+        }
+        for boundary in [" ", "\n", ",", ".", "’", "!"] { XCTAssertTrue(qualifies("say i", boundary)) }
+        for key in ["t", "1", "_", "@"] { XCTAssertFalse(qualifies("say i", key)) }
+        for prefix in ["ski", "user@i", "host.i", "key_i"] { XCTAssertFalse(qualifies(prefix, " ")) }
+        XCTAssertFalse(qualifies("i", " ", right: "ce"))
+        XCTAssertFalse(qualifies("i", " ", selection: "words"))
+    }
+
     func testBurmeseSuggestionsRespectTextOnBothSidesOfCaret() {
         func titles(after right: String) -> [String] {
             Completions.matches(before: "သူကျော", after: right, language: .burmese).map(\.title)

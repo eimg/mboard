@@ -703,6 +703,7 @@ final class KeyboardViewController: UIInputViewController {
         if allowsAutomaticWordSpacing, language.needsWordSpace(before: value, at: suggestionContext) {
             // Commit the separator outside the Burmese marked syllable.
             finishComposition()
+            _ = capitalizePronoun(before: " ", at: editHost.context)
             editHost.insert(" ")
         }
         editor.type(value, in: editHost)
@@ -751,7 +752,7 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             finishComposition()
             let proxy = textDocumentProxy
-            let before = HostContext(proxy)
+            let before = capitalizePronoun(before: " ", at: HostContext(proxy))
             if let separator = doubleSpace.separator(for: language, at: before) {
                 typingHistory.observe(before)
                 finishTypingHistory()
@@ -789,6 +790,14 @@ final class KeyboardViewController: UIInputViewController {
         allowsEnglishWordEdits && textDocumentProxy.permitsPersonalSuggestions
     }
 
+    private func capitalizePronoun(before input: String, at context: HostContext) -> HostContext {
+        guard autoCapitalize, context.before?.last == "i", allowsAutomaticWordSpacing,
+              textDocumentProxy.autocapitalizationType != .some(.none),
+              let pronoun = EnglishToken.standalonePronoun(at: context, before: input) else { return context }
+        _ = pronoun.replace(with: "I", at: context, in: editHost)
+        return editHost.context
+    }
+
     private func insertHostText(_ value: String, applyingWordSpacing: Bool = false) {
         doubleSpace = DoubleSpaceShortcut()
         finishComposition()
@@ -797,7 +806,8 @@ final class KeyboardViewController: UIInputViewController {
             (language.needsWordSpace(before: value, at: context) ||
              (language == .english && deferredSpace.consume(before: value, at: context)))
         deferredSpace = DeferredEnglishSpace()
-        insertAndObserve(addSpace ? " " + value : value, at: context)
+        let insertion = addSpace ? " " + value : value
+        insertAndObserve(insertion, at: capitalizePronoun(before: insertion, at: context))
         didType()
     }
 
