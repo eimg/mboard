@@ -4,6 +4,8 @@ MBoard is a native, offline English and Burmese keyboard for iPhone and iPad run
 
 ## Layout and editing
 
+- In ordinary text fields, starting a Burmese word immediately after an English word or an English word immediately after a Burmese word inserts one space. This applies to typed words and accepted suggestions, including Burmese input starting with ေ. Switching layouts alone does not insert text. Punctuation, digits and existing whitespace do not trigger this shortcut.
+- On the Burmese base layer, holding a key and lifting in place chooses its Gboard default. Slide to select additional iOS Burmese compounds, including က္က and က္ခ on က, and all five န stacks on န. On top-row keys, added compounds appear above the original Gboard choices so existing horizontal slides keep their targets.
 - Preserve the familiar Android Gboard phone key positions and language layers. Use the captured layouts for key placement and long presses. Use MyanSan Smart as a composition reference, with observed Gboard output taking priority when rules differ. [Burmese layout](references/gboard-burmese/README.md) · [English layout and emoji](references/gboard-english/README.md) · [Composition examples](references/myansan/README.md)
 - The bottom-left key shows the destination language. The adjacent symbol key uses the current language. Symbol pages stay open for consecutive symbols. After entering a symbol, Space or Return goes back to letters.
 - Double-tapping Space after a word inserts the active language’s sentence ending and a space. Holding Space and dragging moves the caret. English Shift supports one-shot capitalization and Caps Lock. Automatic capitalization follows the field’s mode. In sentence mode, English words in Burmese text start with a capital.
@@ -28,6 +30,6 @@ The emoji picker uses a single scrollable grid, session recents, skin-tone choic
 
 ## Validation and scope
 
-Core regressions cover composition, deletion, replacement, spelling, personal ranking and persistence. The Burmese fixture includes 458 Gboard input sequences. Simulator UI tests exercise the practice field, language switching, appearance-dependent controls, suggestions and emoji. The 0.1 build 12 development revision passed 48 core tests and eight simulator UI tests and was installed on the maintainer’s iPhone 15 Plus. Daily typing comfort and cross-app compatibility require physical-device testing. [Test instructions](CONTRIBUTING.md)
+Core regressions cover composition, deletion, replacement, spelling, personal ranking and persistence. The Burmese fixture includes 458 Gboard input sequences. Simulator UI tests exercise mixed-script spacing, compound selection, language switching, appearance-dependent controls, suggestions and emoji in the practice field. Daily typing comfort and cross-app compatibility require physical-device testing. [Test instructions](CONTRIBUTING.md)
 
 Typing requires no account, network or Full Access. iOS supplies its own keyboard in secure fields and some numeric fields, and apps can restrict third-party keyboards. Automatic correction, swipe typing, cloud sync and voice input are outside the current implementation. See the [changelog](CHANGELOG.md) for version status.

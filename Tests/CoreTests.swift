@@ -2,6 +2,28 @@ import XCTest
 @testable import MBoardCore
 
 final class CoreTests: XCTestCase {
+    func testMixedWordSpaceUsesTheScriptsAtTheCaret() {
+        let id = UUID()
+        func needsSpace(_ left: String, _ key: String, _ language: Language, selection: String? = nil) -> Bool {
+            language.needsWordSpace(before: key, at: HostContext(document: id, before: left, after: "", selection: selection))
+        }
+        for key in ["မ", "ေ", "က္က", "၎င်း", "၏"] {
+            XCTAssertTrue(needsSpace("Café", key, .burmese), key)
+        }
+        for left in ["က", "မြန်မာ", "ကျောင်း", "၏"] {
+            XCTAssertTrue(needsSpace(left, "A", .english), left)
+        }
+        for key in ["။", "၊", "၁", " ", "\n"] {
+            XCTAssertFalse(needsSpace("Hello", key, .burmese), key)
+        }
+        for left in ["က ", "က။", "က၁", "🙂", "", "Hello"] {
+            XCTAssertFalse(needsSpace(left, "a", .english), left)
+        }
+        XCTAssertFalse(needsSpace("hello ", "က", .burmese))
+        XCTAssertFalse(needsSpace("hello", "က", .burmese, selection: "world"))
+        XCTAssertFalse(needsSpace("က", "န", .burmese))
+    }
+
     func testSpacebarDragStepsThroughVisibleCharactersAndReversesAtEdges() {
         let id = UUID()
         func context(_ before: String, _ after: String) -> HostContext {
@@ -172,8 +194,10 @@ final class CoreTests: XCTestCase {
         for row in rows.indices {
             for col in rows[row].indices {
                 let key = rows[row][col]
-                XCTAssertTrue(key.alternatives.indices.contains(key.defaultIndex))
-                if row > 0 { XCTAssertEqual(key.alternatives.first, KeyboardLayout.shifted[row][col]) }
+                XCTAssertEqual(Set(key.alternatives).count, key.alternatives.count)
+                let original = row == 0 ? KeyboardLayout.topHolds[col] : [KeyboardLayout.shifted[row][col]]
+                XCTAssertTrue(key.alternatives.starts(with: original))
+                XCTAssertEqual(key.defaultIndex, row == 0 ? KeyboardLayout.defaults[col] : 0)
             }
         }
     }

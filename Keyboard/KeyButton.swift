@@ -86,6 +86,7 @@ final class KeyPopup: UIView {
     private var defaultIndex = 0
     private var selected = 0
     private var columns = 1
+    private var bottomRowFirst = false
     private var cell = CGSize.zero
 
     var isChoosingAlternate: Bool { holdStart != nil }
@@ -117,7 +118,9 @@ final class KeyPopup: UIView {
         selected = defaultIndex
         cell = CGSize(width: min(availableWidth, min(60, max(51, keyFrame.width + 14))),
                       height: min(48, keyFrame.height + 6))
-        let preferredColumns = values.count > 4 ? (values.count + 1) / 2 : values.count
+        let originalColumns = start == nil ? nil : key.letter?.originalHoldRowWidth
+        bottomRowFirst = originalColumns != nil
+        let preferredColumns = originalColumns ?? (values.count > 4 ? (values.count + 1) / 2 : values.count)
         columns = min(preferredColumns, max(1, Int(availableWidth / cell.width)))
         let rows = (values.count + columns - 1) / columns
         let size = CGSize(width: CGFloat(columns) * cell.width, height: CGFloat(rows) * cell.height)
@@ -141,7 +144,7 @@ final class KeyPopup: UIView {
             }
             let label = labels[index]
             label.frame = CGRect(x: CGFloat(index % columns) * cell.width,
-                                 y: CGFloat(index / columns) * cell.height, width: cell.width, height: cell.height)
+                                 y: CGFloat(menuRow(index / columns)) * cell.height, width: cell.width, height: cell.height)
             label.text = LetterKey.label(for: value)
             label.font = KeyButton.labelFont(for: value, size: 31)
             label.isHidden = false
@@ -152,14 +155,22 @@ final class KeyPopup: UIView {
         board.addSubview(self)
     }
 
+    // Reversing the row order is its own inverse for rendering and hit testing.
+    private func menuRow(_ row: Int) -> Int {
+        bottomRowFirst ? (options.count - 1) / columns - row : row
+    }
+
     func track(_ point: CGPoint) {
         guard let holdStart else { return }
         let local = convert(point, from: superview)
         let column = max(0, min(columns - 1, Int(floor(local.x / cell.width))))
         let row = max(0, min((options.count - 1) / columns, Int(floor(local.y / cell.height))))
+        // The board's top edge can push the popup down over the source key.
+        // Horizontal drags from anywhere on that key still use its original row.
+        let optionRow = bottomRowFirst && abs(point.y - holdStart.y) < 8 ? 0 : menuRow(row)
         // Lifting in place chooses the default even if the popup was clamped at an edge.
         let next = hypot(point.x - holdStart.x, point.y - holdStart.y) < 8
-            ? defaultIndex : min(options.count - 1, row * columns + column)
+            ? defaultIndex : min(options.count - 1, optionRow * columns + column)
         guard next != selected else { return }
         labels[selected].backgroundColor = .clear
         selected = next

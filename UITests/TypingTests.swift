@@ -17,6 +17,77 @@ final class TypingTests: XCTestCase {
         XCTAssertTrue(app.buttons["Switch to " + destination].waitForExistence(timeout: 3))
     }
 
+    func testMixedScriptSpacingInThePracticeField() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        let h = app.buttons["key.H"]
+        (h.exists ? h : app.buttons["key.h"]).tap()
+        app.buttons["key.e"].tap()
+        let hello = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "completion.hello")).firstMatch
+        XCTAssertTrue(hello.waitForExistence(timeout: 4))
+        hello.tap()
+        func expect(_ value: String) {
+            XCTAssertEqual((field.value as? String)?.lowercased(), value)
+        }
+        app.buttons["Switch to Burmese"].tap()
+        expect("hello")
+        app.buttons["key.ေ"].tap()
+        app.buttons["key.က"].tap()
+        expect("hello ကေ")
+        app.buttons["Switch to English"].tap()
+        expect("hello ကေ")
+        app.buttons["key.A"].tap()
+        app.buttons["key.b"].tap()
+        expect("hello ကေ ab")
+        app.buttons["Switch to Burmese"].tap()
+        app.buttons["key.န"].tap()
+        expect("hello ကေ ab န")
+        app.buttons["Switch to English"].tap()
+        app.buttons["Space"].tap()
+        app.buttons["key.C"].tap()
+        app.buttons["Switch to Burmese"].tap()
+        app.buttons["key.။"].tap()
+        expect("hello ကေ ab န c။")
+    }
+
+    func testBurmeseHoldAndSlideCompounds() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("Burmese", in: app)
+
+        let ka = app.buttons["key.က"]
+        ka.press(forDuration: 0.6)
+        XCTAssertEqual(field.value as? String, "ဥ")
+        app.buttons["Space"].tap()
+        app.buttons["key.တ"].tap()
+        let center = CGVector(dx: 0.5, dy: 0.5)
+        let start = ka.coordinate(withNormalizedOffset: center)
+        start.press(forDuration: 0.6, thenDragTo: start.withOffset(CGVector(dx: 54, dy: 0)))
+        XCTAssertEqual(field.value as? String, "ဥ တက္က")
+
+        // Slide across the lower row of the six-choice န menu.
+        let na = app.buttons["key.န"].coordinate(withNormalizedOffset: center)
+        na.press(forDuration: 0.6, thenDragTo: na.withOffset(CGVector(dx: 110, dy: 0)))
+        XCTAssertEqual(field.value as? String, "ဥ တက္ကန္န")
+
+        // The top-row ဂ menu already offered ASCII 8 one cell left of its default.
+        let gaKey = app.buttons["key.ဂ"]
+        let nearTop = gaKey.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        nearTop.press(forDuration: 0.6, thenDragTo: nearTop.withOffset(CGVector(dx: -54, dy: 0)))
+        XCTAssertEqual(field.value as? String, "ဥ တက္ကန္န8")
+        let ga = gaKey.coordinate(withNormalizedOffset: center)
+        let upperRow = ga.withOffset(CGVector(dx: -54, dy: -gaKey.frame.height * 1.2))
+        ga.press(forDuration: 0.6, thenDragTo: upperRow)
+        XCTAssertEqual(field.value as? String, "ဥ တက္ကန္န8ဂ္ဃ")
+    }
+
     func testEnglishCorrectionsAndPersonalContextStayCentered() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

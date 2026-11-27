@@ -163,6 +163,14 @@ final class CompletionTests: XCTestCase {
         type("x ")
         XCTAssertNil(tracker.finish())
         XCTAssertNil(tracker.inserted("t", from: context(buffer), to: context(buffer)))
+
+        buffer = "မြန်မာ A"
+        XCTAssertNil(tracker.inserted(" A", from: context("မြန်မာ"), to: context(buffer), automaticInitial: true))
+        type("pp ")
+        let mixed = tracker.settled(at: context(buffer))
+        XCTAssertEqual(mixed?.word, "App")
+        XCTAssertEqual(mixed?.intentionalCase, false)
+        XCTAssertNil(mixed?.previous)
     }
 
     func testReadsLegacyHistoryAndPersistsTypedPairCounts() async throws {

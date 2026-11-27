@@ -2,6 +2,8 @@
 
 ## 0.1.1 — in development
 
+- Starting an English word after Burmese, or a Burmese word after English, now adds a space automatically.
+- Hold a Burmese key and slide to type a stacked consonant, such as က္က on က or န္ဒ on န. Lifting in place selects the familiar Gboard shortcut.
 - English suggestions now put the top choice in the center and offer spelling corrections while typing or editing a word. Tap to correct a typo, add a missing space or restore an apostrophe, such as `Im` → `I'm`. Pressing Space keeps your spelling.
 - English learns frequently typed words and uses the preceding word to rank matches locally. Sensitive fields skip suggestions and learning. Forget individual words or clear the history in keyboard settings.
 - After accepting an English suggestion, keep typing to start the next word or tap punctuation to attach it directly.

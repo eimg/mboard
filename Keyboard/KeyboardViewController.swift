@@ -700,6 +700,11 @@ final class KeyboardViewController: UIInputViewController {
             insertLiteral(value)
             return
         }
+        if allowsAutomaticWordSpacing, language.needsWordSpace(before: value, at: suggestionContext) {
+            // Commit the separator outside the Burmese marked syllable.
+            finishComposition()
+            editHost.insert(" ")
+        }
         editor.type(value, in: editHost)
         didType()
     }
@@ -776,17 +781,23 @@ final class KeyboardViewController: UIInputViewController {
             didType()
             return
         }
-        let addSpace = language == .english && symbolPage == nil && allowsEnglishWordEdits
-            && deferredSpace.consume(before: value, at: HostContext(textDocumentProxy))
-        insertHostText(addSpace ? " " + value : value)
+        insertHostText(value, applyingWordSpacing: symbolPage == nil)
         if value == "\n" { returnToLettersAfterSeparator() }
     }
 
-    private func insertHostText(_ value: String) {
-        deferredSpace = DeferredEnglishSpace()
+    private var allowsAutomaticWordSpacing: Bool {
+        allowsEnglishWordEdits && textDocumentProxy.permitsPersonalSuggestions
+    }
+
+    private func insertHostText(_ value: String, applyingWordSpacing: Bool = false) {
         doubleSpace = DoubleSpaceShortcut()
         finishComposition()
-        insertAndObserve(value, at: nil)
+        let context = HostContext(textDocumentProxy)
+        let addSpace = applyingWordSpacing && allowsAutomaticWordSpacing &&
+            (language.needsWordSpace(before: value, at: context) ||
+             (language == .english && deferredSpace.consume(before: value, at: context)))
+        deferredSpace = DeferredEnglishSpace()
+        insertAndObserve(addSpace ? " " + value : value, at: context)
         didType()
     }
 
@@ -806,13 +817,12 @@ final class KeyboardViewController: UIInputViewController {
         persist(typingHistory.finish())
     }
 
-    private func insertAndObserve(_ value: String, at context: HostContext?) {
+    private func insertAndObserve(_ value: String, at before: HostContext) {
         guard learnsEnglish else {
             typingHistory = EnglishTypingHistory()
             textDocumentProxy.insertText(value)
             return
         }
-        let before = context ?? HostContext(textDocumentProxy)
         let automatic = shift && manualShiftContext == nil && capsLockDocument == nil
         textDocumentProxy.insertText(value)
         let after = HostContext(textDocumentProxy)

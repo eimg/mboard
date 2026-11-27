@@ -218,9 +218,10 @@ struct EnglishTypingHistory {
         guard before != after, before.selection?.isEmpty != false,
               after.matchesCaret(in: before, before: (before.before ?? "") + text, after: before.after ?? ""),
               let key = text.last else { self = Self(); return nil }
-        let deferred = picked && text.count == 2 && text.first == " " && EnglishToken.isLetter(key)
-        guard text.count == 1 || deferred else { self = Self(); return nil }
-        if deferred { separator = " " }
+        let startsAfterSpace = text.count == 2 && text.first == " " && EnglishToken.isLetter(key)
+            && (picked || Language.english.needsWordSpace(before: String(key), at: before))
+        guard text.count == 1 || startsAfterSpace else { self = Self(); return nil }
+        if startsAfterSpace { separator = " " }
         let boundary = separator
         let previous = boundary == " " ? current?.word : nil
         var completed: Entry?
