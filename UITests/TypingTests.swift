@@ -1,6 +1,107 @@
 import XCTest
 
 final class TypingTests: XCTestCase {
+    func testLogoMenuLanguageTipsAndHideKeyboard() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("Burmese", in: app)
+
+        func menuItem(_ title: String) -> XCUIElement {
+            let item = app.buttons[title]
+            // Flat menus scroll inside the extension on compact keyboard heights.
+            for _ in 0..<4 {
+                if item.exists && item.isHittable { return item }
+                let menu = app.collectionViews.firstMatch
+                guard menu.exists else { break }
+                // Native menu AX bounds include content clipped by the keyboard.
+                // Start well inside the visible area instead of the usual bottom edge.
+                menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).press(
+                    forDuration: 0.01, thenDragTo: menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
+            }
+            XCTAssertTrue(item.waitForExistence(timeout: 3), title)
+            XCTAssertTrue(item.isHittable, title)
+            return item
+        }
+        func openTips(_ language: String) {
+            app.buttons["MBoard Menu"].tap()
+            XCTAssertTrue(app.buttons["Auto-Capitalization"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.buttons["Word Suggestions"].exists)
+            XCTAssertFalse(app.buttons["Keyboard Settings"].exists, "Settings should be inline, not a submenu.")
+            XCTAssertFalse(app.staticTexts["Appearance"].exists)
+            for title in ["Appearance", "System", "Light", "Dark"] {
+                XCTAssertFalse(app.buttons[title].exists, title)
+            }
+            XCTAssertFalse(app.buttons["About & Privacy"].exists)
+            if language == "Burmese" {
+                snapshot("Flat menu before scrolling")
+            }
+            let tips = menuItem(language + " Typing")
+            XCTAssertTrue(app.staticTexts["Typing Tips"].exists)
+            if language == "Burmese" { snapshot("MBoard menu") }
+            tips.tap()
+            let back = app.buttons["Back to Keyboard"]
+            let hide = app.buttons["Hide Keyboard"]
+            XCTAssertTrue(back.waitForExistence(timeout: 3))
+            XCTAssertTrue(hide.isHittable)
+            let title = app.staticTexts[language == "Burmese" ? "မြန်မာ Typing Tips" : "English Typing Tips"]
+            let firstTip = app.otherElements[language == "Burmese" ? "typingTips.burmese.hold" : "typingTips.english.cursor"]
+            XCTAssertGreaterThanOrEqual(title.frame.minY, max(back.frame.maxY, hide.frame.maxY))
+            XCTAssertEqual(title.frame.midX, firstTip.frame.midX, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(firstTip.frame.minY - title.frame.maxY, 15)
+        }
+        func snapshot(_ name: String) {
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+
+        app.buttons["key.က"].tap()
+        snapshot("Keyboard toolbar")
+        openTips("Burmese")
+        XCTAssertTrue(app.otherElements["typingTips.burmese.hold"].isHittable)
+        XCTAssertTrue(app.otherElements["typingTips.burmese.stacking"].isHittable)
+        XCTAssertFalse(app.buttons["key.က"].isHittable)
+        snapshot("Burmese typing tips")
+        XCTAssertEqual(field.value as? String, "က")
+        app.buttons["Back to Keyboard"].tap()
+        XCTAssertTrue(app.buttons["key.က"].isHittable)
+
+        // Follow the stacking tip using the actual Shift-layer key.
+        app.buttons["Shift"].tap()
+        app.buttons["key.္"].tap()
+        app.buttons["key.က"].tap()
+        XCTAssertEqual(field.value as? String, "က္က")
+        app.buttons["Switch to English"].tap()
+        openTips("English")
+        XCTAssertTrue(app.otherElements["typingTips.english.cursor"].isHittable)
+        XCTAssertTrue(app.otherElements["typingTips.english.period"].isHittable)
+        XCTAssertFalse(app.otherElements["typingTips.burmese.hold"].exists)
+        snapshot("English typing tips")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        XCTAssertTrue(app.buttons["Back to Keyboard"].isHittable)
+        app.scrollViews.firstMatch.swipeUp()
+        XCTAssertTrue(app.otherElements["typingTips.english.period"].isHittable)
+        snapshot("Landscape typing tips")
+        XCUIDevice.shared.orientation = .portrait
+
+        // Hiding from help resets the help panel for the next typing session.
+        app.buttons["Hide Keyboard"].tap()
+        XCTAssertTrue(app.buttons["Back to Keyboard"].waitForNonExistence(timeout: 3))
+        XCTAssertEqual(field.value as? String, "က္က")
+        field.tap()
+        XCTAssertTrue(app.buttons["MBoard Menu"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Back to Keyboard"].exists)
+        XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
+        app.buttons["Hide Keyboard"].tap()
+        XCTAssertTrue(app.buttons["MBoard Menu"].waitForNonExistence(timeout: 3))
+        XCTAssertEqual(field.value as? String, "က္က")
+    }
+
     private func selectKeyboard(_ language: String, in app: XCUIApplication) {
         // Remote keyboard buttons can appear after the practice field receives focus.
         let switches = app.buttons.matching(NSPredicate(format: "label IN %@", ["Switch to English", "Switch to Burmese"]))

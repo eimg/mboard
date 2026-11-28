@@ -10,7 +10,7 @@ MBoard is an offline English and Burmese (မြန်မာ) keyboard for iPhon
   <img src="docs/images/iphone/03-emoji.png" alt="MBoard emoji picker on iPhone" width="31%">
 </p>
 
-**Release status** · Version 0.1 (build 11) has been submitted and is awaiting App Store review. The source and feature descriptions below cover 0.1.1 in development for iOS and iPadOS 16 or later.
+**Release status** · The screenshots show the 0.1 interface. Version 0.1 (build 11) has been submitted and is awaiting App Store review. The source and feature descriptions below cover 0.1.1 in development for iOS and iPadOS 16 or later.
 
 ## Build from source
 
@@ -30,9 +30,10 @@ Open the MBoard app to practice typing and read the Myanmar setup instructions. 
 
 - Use the far-left key on the bottom row. Tap **abc** for English or **ကခ** for Burmese.
 - Tap an English suggestion and keep typing to start the next word. The top suggestion stays in the center. Typing **Im** offers **I'm**. Typing **well** keeps **we'll** available as an alternative. Tap a correction while typing or when editing an existing word, or choose a suggested split such as **thank you** for **thankyou**. English uses Apple’s on-device dictionary. Burmese uses a bundled word list and everyday phrases, including inside text written without spaces.
-- Suggestions you pick and English words you repeatedly finish typing move up for future matches. The preceding English word can influence which suggestion appears first. Long-press a learned suggestion and choose **Forget This Suggestion** to reset its ranking. To reset both languages, tap the settings gear at the top right and choose **Clear Learned Words → Clear for Both Languages**.
+- Suggestions you pick and English words you repeatedly finish typing move up for future matches. The preceding English word can influence which suggestion appears first. Long-press a learned suggestion and choose **Forget This Suggestion** to reset its ranking. To reset both languages, tap the MBoard logo and choose **Clear Learned Words → Clear for Both Languages**.
 - Tap the smiley key for one full emoji list, with your saved recents and common emoji first. Search in English or Burmese, including everyday queries such as “happy”, “thanks” and “love”, or touch and hold an emoji for skin tones. Tap Done or return to the app’s text field to leave search.
-- Tap the settings gear in the top-right corner for **Auto-Capitalization**, **Word Suggestions**, and **System**, **Light**, or **Dark** appearance. Both typing switches start on. In ordinary text fields, English words in a Burmese sentence start with a capital, as in **ဒီမှာ App Store ကိုဖွင့်ပါ**.
+- The keyboard follows the system appearance. Tap the MBoard logo for **Auto-Capitalization** and **Word Suggestions**. Both typing switches start on. In ordinary text fields, English words in a Burmese sentence start with a capital, as in **ဒီမှာ App Store ကိုဖွင့်ပါ**.
+- Choose **Burmese Typing** or **English Typing** under **Typing Tips** at the bottom of the logo menu for help with the active language. Burmese explains holding and releasing a key in place and building stacked consonants with **္**. English explains cursor dragging and double-Space punctuation. Tap **Back** to resume typing, or the keyboard/down-arrow button at the top right to hide the keyboard.
 - Double-tap Space after a word to insert a period and a space in English, or ။ and a space in Burmese. Tap **123** or **၁၂၃** to open symbols. You can enter several digits or symbols, then press Space to return to letters.
 - Double-tap English Shift for Caps Lock. Tap Shift once to return to lowercase.
 - Hold Space until the keys dim, then drag left or right to move the cursor. Select text and tap Backspace once to delete the whole selection.

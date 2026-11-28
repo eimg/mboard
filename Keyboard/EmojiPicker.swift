@@ -120,11 +120,6 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     var onSearchLayoutChange: (() -> Void)?
     private(set) var recent: [EmojiItem]
     private(set) var isSearching = false
-    var usesSystemBackground: Bool {
-        didSet {
-            if usesSystemBackground != oldValue { updateBackground() }
-        }
-    }
     var showsResults: Bool { isSearching && (!searchTerm.isEmpty || variants != nil) }
 
     private var catalog: EmojiCatalog?
@@ -151,11 +146,9 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let heading = UILabel()
     private let grid = EmojiGrid()
 
-    init(recent: [EmojiItem], language: Language, usesSystemBackground: Bool, topInset: CGFloat) {
+    init(recent: [EmojiItem], language: Language, topInset: CGFloat) {
         self.recent = recent
-        self.usesSystemBackground = usesSystemBackground
         super.init(frame: .zero)
-        updateBackground()
         stack.axis = .vertical
         stack.spacing = 2
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -272,13 +265,8 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         setSearchActive(true)
     }
 
-    private func updateBackground() {
-        backgroundColor = usesSystemBackground || isSearching ? .clear : KeyColors.emojiSurface
-    }
-
     private func setSearchActive(_ active: Bool) {
         isSearching = active
-        updateBackground()
         committedQuery = ""
         queryComposition = BurmeseComposition()
         variants = nil

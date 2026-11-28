@@ -94,14 +94,15 @@ private final class SuggestionButton: UIButton {
 
 final class KeyboardViewController: UIInputViewController {
     private let board = UIView()
-    private let contentTopInset: CGFloat = 7
-    private let background = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+    private let contentTopInset: CGFloat = 10
     private let keyArea = UIStackView()
     private let toolbar = UIStackView()
     private let rows = UIStackView()
     private let candidates = UIStackView()
     private weak var highlightedSuggestion: UIButton?
-    private let settingsButton = UIButton(type: .system)
+    private let menuButton = UIButton(type: .system)
+    private let hideButton = UIButton(type: .system)
+    private var typingTips: KeyboardTipsView?
     private var height: NSLayoutConstraint?
     private var keyAreaTop: NSLayoutConstraint?
     private var pickerBottom: NSLayoutConstraint?
@@ -109,7 +110,6 @@ final class KeyboardViewController: UIInputViewController {
     private var emojiSearchContext: HostContext?
     private var isInsertingEmoji = false
     private var language = Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .burmese
-    private var appearance = UserDefaults.standard.string(forKey: "appearance") ?? "System"
     private var autoCapitalize = UserDefaults.standard.object(forKey: "autoCapitalize") as? Bool ?? true
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
@@ -145,19 +145,8 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         board.translatesAutoresizingMaskIntoConstraints = false
-        board.layer.cornerCurve = .continuous
-        board.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         board.clipsToBounds = true
         view.addSubview(board)
-        background.contentView.backgroundColor = UIColor { traits in
-            if traits.userInterfaceStyle == .dark {
-                return UIColor.black.withAlphaComponent(0.6)
-            }
-            return UIColor.systemFill.resolvedColor(with: traits)
-        }
-        background.translatesAutoresizingMaskIntoConstraints = false
-        background.isUserInteractionEnabled = false
-        board.addSubview(background)
         keyArea.addArrangedSubview(toolbar)
         keyArea.addArrangedSubview(rows)
         keyArea.axis = .vertical
@@ -169,8 +158,6 @@ final class KeyboardViewController: UIInputViewController {
         NSLayoutConstraint.activate([
             board.leadingAnchor.constraint(equalTo: view.leadingAnchor), board.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             board.topAnchor.constraint(equalTo: view.topAnchor), board.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            background.leadingAnchor.constraint(equalTo: board.leadingAnchor), background.trailingAnchor.constraint(equalTo: board.trailingAnchor),
-            background.topAnchor.constraint(equalTo: board.topAnchor), background.bottomAnchor.constraint(equalTo: board.bottomAnchor),
             keyArea.leadingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.leadingAnchor, constant: 4),
             keyArea.trailingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.trailingAnchor, constant: -4),
             top,
@@ -184,24 +171,33 @@ final class KeyboardViewController: UIInputViewController {
         rows.axis = .vertical
         rows.distribution = .fillEqually
         rows.spacing = 5
+        toolbar.isLayoutMarginsRelativeArrangement = true
+        toolbar.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 7, bottom: 0, trailing: 7)
         toolbar.spacing = 3
         candidates.distribution = .fillEqually
         for _ in 0..<3 { candidates.addArrangedSubview(UIView()) }
-        let brand = UIView()
         let mark = UIImageView(image: UIImage(named: "MBoardMark"))
         mark.translatesAutoresizingMaskIntoConstraints = false
         mark.layer.cornerRadius = 6
         mark.layer.cornerCurve = .continuous
         mark.clipsToBounds = true
-        brand.isUserInteractionEnabled = false
-        brand.addSubview(mark)
-        toolbar.addArrangedSubview(brand)
+        mark.isUserInteractionEnabled = false
+        menuButton.addSubview(mark)
+        menuButton.accessibilityLabel = "MBoard Menu"
+        menuButton.accessibilityHint = "Keyboard settings and typing tips."
+        menuButton.showsMenuAsPrimaryAction = true
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.down",
+                                                withConfiguration: UIImage.SymbolConfiguration(pointSize: 6, weight: .medium)))
+        chevron.tintColor = .secondaryLabel
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        menuButton.addSubview(chevron)
+        toolbar.addArrangedSubview(menuButton)
         // The toolbar spacer fixes the label columns. The actual buttons include the
         // empty strips above and below the bar, up to the first row of typing keys.
         let suggestionSlot = UIView()
         suggestionSlot.isUserInteractionEnabled = false
         toolbar.addArrangedSubview(suggestionSlot)
-        toolbar.addArrangedSubview(settingsButton)
+        toolbar.addArrangedSubview(hideButton)
         candidates.translatesAutoresizingMaskIntoConstraints = false
         candidates.isHidden = true
         board.addSubview(candidates)
@@ -210,20 +206,21 @@ final class KeyboardViewController: UIInputViewController {
             candidates.trailingAnchor.constraint(equalTo: suggestionSlot.trailingAnchor),
             candidates.topAnchor.constraint(equalTo: toolbar.topAnchor, constant: -contentTopInset),
             candidates.bottomAnchor.constraint(equalTo: rows.topAnchor),
-            brand.widthAnchor.constraint(equalToConstant: 36),
-            mark.centerXAnchor.constraint(equalTo: brand.centerXAnchor),
-            mark.centerYAnchor.constraint(equalTo: brand.centerYAnchor),
-            mark.widthAnchor.constraint(equalToConstant: 27),
+            menuButton.widthAnchor.constraint(equalToConstant: 36),
+            mark.leadingAnchor.constraint(equalTo: menuButton.leadingAnchor, constant: 1),
+            mark.centerYAnchor.constraint(equalTo: menuButton.centerYAnchor),
+            mark.widthAnchor.constraint(equalToConstant: 25),
             mark.heightAnchor.constraint(equalTo: mark.widthAnchor),
-            settingsButton.widthAnchor.constraint(equalToConstant: 36)
+            chevron.trailingAnchor.constraint(equalTo: menuButton.trailingAnchor),
+            chevron.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
+            hideButton.widthAnchor.constraint(equalToConstant: 36)
         ])
-        let gearSize = UIImage.SymbolConfiguration(pointSize: 15, weight: .regular)
-        settingsButton.setImage(UIImage(systemName: "gearshape", withConfiguration: gearSize), for: .normal)
-        settingsButton.tintColor = KeyColors.ink
-        settingsButton.accessibilityLabel = "MBoard Keyboard Settings"
-        settingsButton.showsMenuAsPrimaryAction = true
+        hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down"), for: .normal)
+        hideButton.setPreferredSymbolConfiguration(.init(pointSize: 14, weight: .regular), forImageIn: .normal)
+        hideButton.tintColor = KeyColors.ink
+        hideButton.accessibilityLabel = "Hide Keyboard"
+        hideButton.addAction(UIAction { [weak self] _ in self?.dismissKeyboard() }, for: .touchUpInside)
         primaryLanguage = language.rawValue
-        configureAppearance()
         configureSettingsMenu()
         rebuild()
     }
@@ -243,7 +240,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
-        let contentHeight: CGFloat = compact ? 199 : 275
+        let contentHeight: CGFloat = compact ? 199 : (typingTips?.preferredPortraitHeight ?? 275)
         var panelHeight: CGFloat = 0
         if let emojiPicker, emojiPicker.isSearching {
             panelHeight = emojiPicker.showsResults ? (compact ? 92 : 140) : 42
@@ -260,35 +257,14 @@ final class KeyboardViewController: UIInputViewController {
         deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         typedOnSymbols = false
+        closeTypingTips(resumingTyping: false)
         closeEmoji()
         finishComposition()
         cancelGestures()
         clearSuggestions()
     }
 
-    private func configureAppearance() {
-        let usesSystemBackground = appearance == "System"
-        background.isHidden = usesSystemBackground
-        board.layer.cornerRadius = usesSystemBackground ? 0 : 12
-        emojiPicker?.usesSystemBackground = usesSystemBackground
-        switch appearance {
-        case "Dark": board.overrideUserInterfaceStyle = .dark
-        case "Light": board.overrideUserInterfaceStyle = .light
-        default:
-            // UIKit updates the input view's traits for both the host field and live theme changes.
-            board.overrideUserInterfaceStyle = .unspecified
-        }
-    }
-
     private func configureSettingsMenu() {
-        let appearanceMenu = UIMenu(title: "Appearance", options: .displayInline, children: ["System","Light","Dark"].map { choice in
-            UIAction(title: choice, state: choice == appearance ? .on : .off) { [weak self] _ in
-                self?.appearance = choice
-                UserDefaults.standard.set(choice, forKey: "appearance")
-                self?.configureAppearance()
-                self?.configureSettingsMenu()
-            }
-        })
         let capitalization = UIAction(title: "Auto-Capitalization", state: autoCapitalize ? .on : .off) { [weak self] _ in
             guard let self else { return }
             autoCapitalize.toggle()
@@ -314,8 +290,47 @@ final class KeyboardViewController: UIInputViewController {
             self?.updateSuggestions(force: true)
         }
         let learned = UIMenu(title: "Clear Learned Words", children: [clear])
-        settingsButton.menu = UIMenu(children: [UIMenu(title: "Typing", options: .displayInline,
-                                                      children: [capitalization, suggestions, learned]), appearanceMenu])
+        let settings = UIMenu(title: "Keyboard Settings", options: .displayInline,
+                              children: [capitalization, suggestions, learned])
+        let tips = UIAction(title: language == .burmese ? "Burmese Typing" : "English Typing") { [weak self] _ in
+            self?.showTypingTips()
+        }
+        menuButton.menu = UIMenu(children: [settings,
+                                          UIMenu(title: "Typing Tips", options: .displayInline, children: [tips])])
+    }
+
+    private func showTypingTips() {
+        guard typingTips == nil else { return }
+        closeEmoji()
+        cancelGestures()
+        doubleSpace = DoubleSpaceShortcut()
+        let tips = KeyboardTipsView(language: language)
+        tips.onClose = { [weak self] in self?.closeTypingTips(resumingTyping: true) }
+        tips.onHide = { [weak self] in self?.dismissKeyboard() }
+        tips.translatesAutoresizingMaskIntoConstraints = false
+        board.addSubview(tips)
+        NSLayoutConstraint.activate([
+            tips.topAnchor.constraint(equalTo: board.topAnchor, constant: contentTopInset),
+            tips.leadingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.leadingAnchor, constant: 8),
+            tips.trailingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.trailingAnchor, constant: -8),
+            tips.bottomAnchor.constraint(equalTo: board.safeAreaLayoutGuide.bottomAnchor, constant: -4)
+        ])
+        typingTips = tips
+        updateKeyboardHeight()
+        keyArea.isHidden = true
+        clearSuggestions()
+        UIAccessibility.post(notification: .screenChanged, argument: tips.backButton)
+    }
+
+    private func closeTypingTips(resumingTyping: Bool) {
+        guard let tips = typingTips else { return }
+        tips.removeFromSuperview()
+        typingTips = nil
+        updateKeyboardHeight()
+        keyArea.isHidden = false
+        guard resumingTyping else { return }
+        updateSuggestions()
+        UIAccessibility.post(notification: .screenChanged, argument: menuButton)
     }
 
     private func englishShift(for context: HostContext) -> Bool {
@@ -368,6 +383,7 @@ final class KeyboardViewController: UIInputViewController {
         // Search changes only our query keyboard; publish its language on exit.
         if !isSearchingEmoji { primaryLanguage = language.rawValue }
         UserDefaults.standard.set(language.rawValue, forKey: "language")
+        configureSettingsMenu()
         manualShiftContext = nil
         symbolPage = nil
         shift = language == .english && englishShift(for: HostContext(textDocumentProxy))
@@ -635,8 +651,7 @@ final class KeyboardViewController: UIInputViewController {
         finishComposition()
         cancelGestures()
         guard emojiPicker == nil else { return }
-        let picker = EmojiPicker(recent: recentEmoji, language: language, usesSystemBackground: appearance == "System",
-                                 topInset: contentTopInset)
+        let picker = EmojiPicker(recent: recentEmoji, language: language, topInset: contentTopInset)
         picker.onInsert = { [weak self] in self?.insertEmoji($0) }
         picker.onDelete = { [weak self] in self?.deleteFromHost() }
         picker.onClose = { [weak self] in self?.closeEmoji() }
@@ -1029,7 +1044,7 @@ final class KeyboardViewController: UIInputViewController {
             clearSuggestions()
             return
         }
-        guard wordSuggestions, emojiPicker == nil, cursorDrag == nil else { clearSuggestions(); return }
+        guard wordSuggestions, emojiPicker == nil, typingTips == nil, cursorDrag == nil else { clearSuggestions(); return }
         let context = suggestionContext
         let mode = language
         let allCaps = (capsLockDocument != nil && capsLockDocument == context.document)
@@ -1081,7 +1096,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func addSuggestion(_ candidate: Completion, context: HostContext, language mode: Language) {
         let button = SuggestionButton(type: .system)
-        // In System appearance, fully transparent pixels can pass through the
+        // Fully transparent pixels can pass through the
         // remote keyboard surface before UIKit hit-tests this button.
         button.backgroundColor = UIColor(white: 0.5, alpha: 0.015)
         button.visualInsets = UIEdgeInsets(top: contentTopInset, left: 0, bottom: keyArea.spacing, right: 0)
