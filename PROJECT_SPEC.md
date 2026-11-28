@@ -4,7 +4,7 @@ MBoard is a native, offline English and Burmese keyboard for iPhone and iPad run
 
 ## Layout and editing
 
-- With Auto-Capitalization enabled in a prose field, a space, Return or punctuation after standalone English `i` capitalizes it to `I`. Continuing a word such as `it` preserves its spelling.
+- With Auto-Capitalization enabled in a prose field, a space, Return or punctuation after standalone English `i` capitalizes it to `I`. Turning automatic Shift off or choosing the quoted spelling preserves lowercase for that occurrence. Immediate Backspace after an automatic pronoun change removes the separator and restores lowercase. Deleting an automatically shifted initial gives the next letter lowercase by default.
 - In ordinary text fields, starting a Burmese word immediately after an English word or an English word immediately after a Burmese word inserts one space. This applies to typed words and accepted suggestions, including Burmese input starting with ေ. Switching layouts alone does not insert text. Punctuation, digits and existing whitespace do not trigger this shortcut.
 - On the Burmese base layer, holding a key and lifting in place chooses its Gboard default. Slide to select additional iOS Burmese compounds, including က္က and က္ခ on က, and all five န stacks on န. On top-row keys, added compounds appear above the original Gboard choices so existing horizontal slides keep their targets.
 - Preserve the familiar Android Gboard phone key positions and language layers. Use the captured layouts for key placement and long presses. Use MyanSan Smart as a composition reference, with observed Gboard output taking priority when rules differ. [Burmese layout](references/gboard-burmese/README.md) · [English layout and emoji](references/gboard-english/README.md) · [Composition examples](references/myansan/README.md)
@@ -16,6 +16,7 @@ MBoard is a native, offline English and Burmese keyboard for iPhone and iPad run
 ## Offline suggestions
 
 - Show up to three suggestions in fixed columns. Place the first choice in the center, the second on the left and the third on the right. Preserve the tap target when additional results arrive. Corrections and word splits require an explicit tap.
+- When English offers a correction, reserve the right-hand slot for the exact typed spelling in quotation marks. Tapping it confirms that occurrence without teaching a permanent spelling preference.
 - English combines the available on-device English text checker with a bundled vocabulary and contraction list. Support prefix completion, spelling correction at the caret or inside a word, and missed spaces such as `thankyou`. Typing `Im` offers `I'm`. For ambiguous forms such as `well`, keep the contraction as an alternative. Space preserves the typed spelling.
 - After accepting an English suggestion, including a phrase or contraction, at the end of ordinary text, the next English letter starts a new word. Punctuation attaches directly. Changing fields, moving the caret, opening the emoji picker or switching language clears pending spacing.
 - Burmese uses conversational entries and 41,120 ICU word-list entries. Look for prefixes inside continuous text, avoid duplicating text to the right of the caret and preserve Burmese spacing. [Dictionary and license notices](THIRD_PARTY_NOTICES.md)
@@ -27,7 +28,9 @@ MBoard is a native, offline English and Burmese keyboard for iPhone and iPad run
 
 The keyboard offers System, Light and Dark appearances for keys, modifiers, suggestions, key previews, alternate menus and the emoji picker. System mode follows the keyboard container’s traits and active field. The practice app follows the system appearance independently.
 
-The emoji picker uses a single scrollable grid, session recents, skin-tone choices and offline English and Burmese search. Focusing search shows the typing keyboard with results above it. Switching languages during search updates the return key.
+The emoji picker keeps one full scrollable grid. Up to 32 locally saved recents come first, followed by 144 curated everyday emoji and the rest of the catalog without duplicates. Keep iOS’s native glyphs and long-press skin-tone choices. The offline catalog uses Unicode Emoji 17.0 and CLDR 48 English and Burmese annotations, plus a small set of informal search aliases. Search matches whole words and prefixes, ranks exact terms before prefixes and common emoji before uncommon ties, and shows skin tones through long press instead of repeating every tone in ordinary results. Filter browsing, search, recents and variants to the emoji version supported by the installed iOS: 14.0 on iOS 16, 15.0 from 16.4, 15.1 from 17.4, 16.0 from 18.4 and 17.0 from 26.4.
+
+Focusing search shows the typing keyboard with results above it, an “Emoji search” spacebar and a Done button that returns directly to host typing. Host text-input and selection callbacks exit search even when a tap reaffirms an unchanged caret in the same field. Also check the host context before routing a key, in case a host changes it without a callback. Hosts that report no interaction at all cannot expose an unchanged-caret tap to the extension; Done remains available. Inserting an emoji result keeps search open for additional emoji. Switching languages during search updates the return key.
 
 ## Validation and scope
 

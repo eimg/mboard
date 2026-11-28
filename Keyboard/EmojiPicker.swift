@@ -1,79 +1,6 @@
 import Accessibility
 import UIKit
 
-struct EmojiItem: Equatable, Sendable {
-    let glyph: String
-    let name: String
-    let keywords: String
-    var base: String {
-        let untoned = String(String.UnicodeScalarView(glyph.unicodeScalars.filter {
-            !(0x1F3FB...0x1F3FF).contains($0.value) && $0.value != 0xFE0F
-        }))
-        return Self.variantBases[untoned] ?? untoned
-    }
-    // Multi-person tone sequences use a different encoding from their default emoji.
-    private static let variantBases = [
-        "🫱‍🫲": "🤝", "👩‍🤝‍👩": "👭", "👩‍🤝‍👨": "👫", "👨‍🤝‍👨": "👬",
-        "🧑‍❤‍💋‍🧑": "💏", "🧑‍❤‍🧑": "💑"
-    ]
-
-}
-
-private struct EmojiCatalog: Sendable {
-    static let shared = EmojiCatalog()
-    let items: [EmojiItem]
-    let browseItems: [EmojiItem]
-    private let groups: [String: [Int]]
-
-    private init() {
-        var items = [EmojiItem]()
-        var browseItems = [EmojiItem]()
-        var groups = [String: [Int]]()
-        if let url = Bundle.main.url(forResource: "Emoji", withExtension: "tsv"),
-           let data = try? Data(contentsOf: url) {
-            // TSV delimiters are single bytes even when the fields contain joined emoji.
-            for line in data.split(separator: 10) {
-                let fields = line.split(separator: 9)
-                guard fields.count >= 3 else { continue }
-                let glyph = String(decoding: fields[1], as: UTF8.self)
-                let item = EmojiItem(glyph: glyph, name: String(decoding: fields[2], as: UTF8.self),
-                                     keywords: fields.count == 4 ? String(decoding: fields[3], as: UTF8.self) : "")
-                groups[item.base, default: []].append(items.count)
-                items.append(item)
-                if !glyph.unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }) {
-                    browseItems.append(item)
-                }
-            }
-        }
-        self.items = items
-        self.browseItems = browseItems
-        self.groups = groups.filter { $0.value.count > 1 }
-    }
-
-    func browse(recent: [EmojiItem]) -> [EmojiItem] {
-        guard !recent.isEmpty else { return browseItems }
-        let recentGlyphs = Set(recent.map(\.glyph))
-        return recent + browseItems.filter { !recentGlyphs.contains($0.glyph) }
-    }
-
-    func variants(for item: EmojiItem) -> [EmojiItem] {
-        groups[item.base]?.map { items[$0] } ?? []
-    }
-
-    func matches(_ query: String) -> [EmojiItem] {
-        var exact = [EmojiItem]()
-        var partial = [EmojiItem]()
-        for item in items {
-            if Task.isCancelled { return [] }
-            if item.name == query { exact.append(item) }
-            else if item.name.localizedCaseInsensitiveContains(query) || item.keywords.contains(query) {
-                partial.append(item)
-            }
-        }
-        return exact + partial
-    }
-}
-
 private final class EmojiGrid: UICollectionView {
     private let flow = UICollectionViewFlowLayout()
 
@@ -134,6 +61,7 @@ private final class EmojiQueryButton: UIButton {
         configuration?.title = query.isEmpty ? "Search emoji" : query
         configuration?.baseForegroundColor = query.isEmpty ? .secondaryLabel : KeyColors.ink
         accessibilityValue = query.isEmpty ? nil : query
+        accessibilityHint = editing ? "Keys enter an emoji search. Tap Done to return to typing." : nil
         let next = editing ? query : nil
         guard next != editingQuery else { return }
         editingQuery = next
@@ -173,6 +101,19 @@ private final class EmojiQueryButton: UIButton {
 }
 
 final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDelegate {
+    private static let catalogTask = Task.detached(priority: .userInitiated) {
+        // Keep unsupported sequences out of browsing, search, recents and variants.
+        let maximumVersion: Double
+        if #available(iOS 26.4, *) { maximumVersion = 17 }
+        else if #available(iOS 18.4, *) { maximumVersion = 16 }
+        else if #available(iOS 17.4, *) { maximumVersion = 15.1 }
+        else if #available(iOS 16.4, *) { maximumVersion = 15 }
+        else { maximumVersion = 14 }
+        let tsv = Bundle.main.url(forResource: "Emoji", withExtension: "tsv")
+            .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+        return EmojiCatalog(tsv: tsv, maximumVersion: maximumVersion)
+    }
+
     var onInsert: ((String) -> Void)?
     var onClose: (() -> Void)?
     var onDelete: (() -> Void)?
@@ -203,6 +144,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let backButton = KeyButton(title: "Back", symbol: "arrow.left")
     private let lettersButton = KeyButton(title: "", modifier: true)
     private let deleteButton = KeyButton(title: "Delete", symbol: "delete.left")
+    private let doneButton = KeyButton(title: "Done", modifier: true)
     private let searchField = UIStackView()
     private let queryButton = EmojiQueryButton()
     private let clearQuery = UIButton(type: .system)
@@ -227,9 +169,13 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         setReturnLanguage(language)
         configureHeaderButton(lettersButton) { [weak self] in self?.onClose?() }
         configureHeaderButton(deleteButton) { [weak self] in self?.onDelete?() }
+        configureHeaderButton(doneButton, width: 50) { [weak self] in self?.onClose?() }
+        doneButton.accessibilityIdentifier = "emoji.search.done"
+        doneButton.accessibilityHint = "Closes emoji search and returns to typing."
         header.addArrangedSubview(backButton)
         header.addArrangedSubview(lettersButton)
         header.addArrangedSubview(searchField)
+        header.addArrangedSubview(doneButton)
         header.addArrangedSubview(deleteButton)
         configureSearchField()
         stack.addArrangedSubview(header)
@@ -253,13 +199,11 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         stack.addArrangedSubview(grid)
         refresh()
         Task { [weak self] in
-            let (catalog, browse) = await Task.detached(priority: .userInitiated) {
-                let catalog = EmojiCatalog.shared
-                return (catalog, catalog.browse(recent: recent))
-            }.value
+            let catalog = await Self.catalogTask.value
             guard let self else { return }
             self.catalog = catalog
-            self.allEmoji = browse
+            self.recent = catalog.recent(glyphs: UserDefaults.standard.stringArray(forKey: "recentEmoji") ?? recent.map(\.glyph))
+            self.allEmoji = catalog.browse(recent: self.recent)
             refresh()
         }
     }
@@ -314,11 +258,11 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         searchField.addArrangedSubview(clearQuery)
     }
 
-    private func configureHeaderButton(_ button: KeyButton, action: @escaping () -> Void) {
+    private func configureHeaderButton(_ button: KeyButton, width: CGFloat = 38, action: @escaping () -> Void) {
         button.fill = .clear
-        let width = button.widthAnchor.constraint(equalToConstant: 38)
-        width.priority = .defaultHigh
-        width.isActive = true
+        let constraint = button.widthAnchor.constraint(equalToConstant: width)
+        constraint.priority = .defaultHigh
+        constraint.isActive = true
         button.addAction(UIAction { _ in action() }, for: .touchUpInside)
     }
 
@@ -398,6 +342,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         backButton.isHidden = showingAllEmoji
         lettersButton.isHidden = !showingAllEmoji
         deleteButton.isHidden = !showingAllEmoji
+        doneButton.isHidden = !isSearching
         queryButton.display(query, editing: isSearching)
         clearQuery.isHidden = query.isEmpty
         heading.text = variants == nil ? nil : "Choose a variation"
@@ -433,6 +378,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
         recent.removeAll { $0 == item }
         recent.insert(item, at: 0)
         recent = Array(recent.prefix(32))
+        UserDefaults.standard.set(recent.map(\.glyph), forKey: "recentEmoji")
         collectionView.deselectItem(at: indexPath, animated: false)
         if variants != nil {
             variants = nil

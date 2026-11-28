@@ -9,12 +9,12 @@ final class CompletionTests: XCTestCase {
             return Completions.englishSuggestions(token, apple: [], guesses: guesses, learned: [],
                                                   allCaps: false).map(\.title)
         }
-        XCTAssertEqual(try titles("say he", "lo!"), ["hello"])
+        XCTAssertEqual(try titles("say he", "lo!"), ["hello", "helo"])
         XCTAssertEqual(try titles("", "Helo!").first, "Hello")
         XCTAssertTrue(try titles("say ", "hello").isEmpty)
         XCTAssertEqual(try titles("THANKYOU", "").first, "THANK YOU")
         XCTAssertEqual(try titles("see", "you").first, "see you")
-        XCTAssertEqual(try titles("gotit", "", ["got it", "go tit"]), ["got it"])
+        XCTAssertEqual(try titles("gotit", "", ["got it", "go tit"]), ["got it", "gotit"])
         XCTAssertFalse(try titles("already", "").contains("al ready"))
         for (left, right) in [("me@thank", "you"), ("www.thankyou", ""), ("see_", "you"),
                               ("https://a/", "thankyou"), ("thankyou2", "")] {
@@ -36,7 +36,8 @@ final class CompletionTests: XCTestCase {
         XCTAssertEqual(try suggestions("helo", guesses: ["he lo", "hello"]).first?.title, "hello")
         XCTAssertEqual(try suggestions("freind", guesses: ["fried", "friend"]).first?.title, "friend")
         let partial = try suggestions("hel", apple: ["hello", "help", "helmet"], guesses: ["hell", "he'll"])
-        XCTAssertEqual(partial.map(\.title), ["hello", "help", "he'll"])
+        XCTAssertEqual(partial.map(\.title), ["hello", "he'll", "hel"])
+        XCTAssertEqual(partial.last?.action, .keep)
         XCTAssertEqual(try suggestions("wondr", guesses: ["wonder"]).first?.title, "wonder")
         XCTAssertEqual(try suggestions("squirre", guesses: ["squirrel"]).first?.action, .append)
         XCTAssertEqual(try suggestions("teh", learned: ["Teh"]).first?.title, "the")
@@ -58,7 +59,7 @@ final class CompletionTests: XCTestCase {
             XCTAssertNotEqual(choices.first?.title, intended)
         }
         let alternatives = try results("well", apple: ["wellness", "wellbeing", "wellies"])
-        XCTAssertEqual(alternatives.map(\.title), ["wellness", "wellbeing", "we'll"])
+        XCTAssertEqual(alternatives.map(\.title), ["wellness", "we'll", "well"])
         let keep = try XCTUnwrap(results("well").first)
         XCTAssertEqual(keep.action, .keep)
         let caret = HostContext(document: UUID(), before: "I'm well", after: "", selection: nil)

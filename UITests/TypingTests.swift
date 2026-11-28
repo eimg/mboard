@@ -178,6 +178,51 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual((field.value as? String)?.lowercased(), "thank you for thank you,")
     }
 
+    func testCaseOverridesBelongToOneOccurrence() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        let delete = app.buttons["Delete"].firstMatch
+        let space = app.buttons["Space"]
+        func key(_ text: String) { app.buttons["key." + text].tap() }
+        key("S")
+        delete.tap()
+        key("i")
+        space.tap()
+        XCTAssertEqual(field.value as? String, "i ")
+
+        key("i")
+        space.tap()
+        XCTAssertEqual(field.value as? String, "i I ")
+        delete.tap()
+        XCTAssertEqual(field.value as? String, "i i")
+        space.tap()
+        XCTAssertEqual(field.value as? String, "i i ")
+
+        key("i")
+        let keep = app.buttons["Keep i"]
+        XCTAssertTrue(keep.waitForExistence(timeout: 3))
+        XCTAssertGreaterThan(keep.frame.midX, field.frame.midX)
+        keep.tap()
+        key(".")
+        delete.tap()
+        key(".")
+        space.tap()
+        app.buttons["Shift"].tap()
+        key("i")
+        space.tap()
+        XCTAssertEqual(field.value as? String, "i i i. i ")
+        for letter in "thankyo" { key(String(letter)) }
+        let keepTypo = app.buttons["Keep thankyo"]
+        XCTAssertTrue(keepTypo.waitForExistence(timeout: 3))
+        keepTypo.tap()
+        key("x")
+        XCTAssertEqual(field.value as? String, "i i i. i thankyo x")
+    }
+
     func testCapitalizesStandalonePronounOnSpaceAndPunctuation() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -271,6 +316,140 @@ final class TypingTests: XCTestCase {
         app.buttons["key.c"].tap()
         XCTAssertEqual(app.buttons["emoji.search.query"].value as? String, "c")
         XCTAssertEqual(field.value as? String, original)
+    }
+
+    func testMovingHostCaretExitsEmojiSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for letter in "hello" {
+            let key = app.buttons["key." + String(letter)]
+            (key.exists ? key : app.buttons["key." + letter.uppercased()]).tap()
+        }
+        app.buttons["Emoji"].tap()
+        app.buttons["emoji.search.query"].tap()
+        app.buttons["key.c"].tap()
+        XCTAssertEqual(app.buttons["emoji.search.query"].value as? String, "c")
+
+        // Move from the end to the start without dismissing the keyboard.
+        field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 6, dy: 24)).tap()
+        XCTAssertTrue(app.buttons["Emoji"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["emoji.search.query"].exists)
+        let x = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key.x")).firstMatch
+        x.tap()
+        XCTAssertEqual((field.value as? String)?.lowercased(), "xhello")
+    }
+
+    func testReturningToSameHostCaretExitsEmojiSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for text in ["", "hi"] {
+            for character in text {
+                let key = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key." + String(character))).firstMatch
+                key.tap()
+            }
+            app.buttons["Emoji"].tap()
+            app.buttons["emoji.search.query"].tap()
+            app.buttons["key.c"].tap()
+            // Tap blank space on the first text line: the insertion point stays at its end.
+            field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 160, dy: 24)).tap()
+            XCTAssertTrue(app.buttons["Emoji"].waitForExistence(timeout: 3))
+            XCTAssertFalse(app.buttons["emoji.search.query"].exists)
+            XCTAssertEqual((field.value as? String)?.lowercased(), text)
+        }
+    }
+
+    func testSelectingHostTextExitsEmojiSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for character in "hi red go" {
+            if character == " " { app.buttons["Space"].tap(); continue }
+            let key = app.buttons["key." + String(character)]
+            (key.exists ? key : app.buttons["key." + character.uppercased()]).tap()
+        }
+        app.buttons["Emoji"].tap()
+        app.buttons["emoji.search.query"].tap()
+        field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 54, dy: 24)).doubleTap()
+        XCTAssertTrue(app.buttons["Emoji"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["emoji.search.query"].exists)
+        app.buttons["Delete"].firstMatch.tap()
+        XCTAssertEqual((field.value as? String)?.lowercased().split(separator: " "), ["hi", "go"])
+    }
+
+    func testDoneExitsEmptyAndPopulatedEmojiSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        for query in ["", "cat"] {
+            app.buttons["Emoji"].tap()
+            app.buttons["emoji.search.query"].tap()
+            for letter in query { app.buttons["key." + String(letter)].tap() }
+            app.buttons["emoji.search.done"].tap()
+            XCTAssertTrue(app.buttons["Emoji"].waitForExistence(timeout: 3))
+            XCTAssertFalse(app.buttons["emoji.search.query"].exists)
+            XCTAssertEqual(field.value as? String, "")
+        }
+        let h = app.buttons.matching(NSPredicate(format: "identifier =[c] %@", "key.h")).firstMatch
+        h.tap()
+        XCTAssertEqual((field.value as? String)?.lowercased(), "h")
+    }
+
+    func testEmojiCommonSearchAndPersistentRecents() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+        app.buttons["Emoji"].tap()
+        let search = app.buttons["emoji.search.query"]
+        search.tap()
+        for query in ["happy", "thanks", "love", "lol", "pink heart"] {
+            for character in query {
+                if character == " " { app.buttons["Space"].tap() }
+                else { app.buttons["key." + String(character)].tap() }
+            }
+            let expected = ["happy": "😊", "thanks": "🙏", "love": "❤️", "lol": "😂", "pink heart": "🩷"][query]!
+            let emoji = app.collectionViews["emoji.grid"].cells["emoji.item." + expected]
+            XCTAssertTrue(emoji.waitForExistence(timeout: 3))
+            XCTAssertTrue(emoji.isHittable)
+            if query == "lol" { XCTAssertFalse(app.collectionViews["emoji.grid"].cells["emoji.item.🍭"].exists) }
+            if query == "pink heart" {
+                emoji.tap()
+                XCTAssertEqual(field.value as? String, "🩷")
+                XCTAssertTrue(search.exists, "Inserting a result keeps search available.")
+                XCTAssertEqual(search.value as? String, query)
+            }
+            app.buttons["Clear emoji search"].tap()
+        }
+        app.buttons["emoji.search.done"].tap()
+        app.terminate()
+        app.launch()
+        field.tap()
+        selectKeyboard("English", in: app)
+        app.buttons["Emoji"].tap()
+        let grid = app.collectionViews["emoji.grid"]
+        XCTAssertTrue(grid.cells["emoji.item.🩷"].waitForExistence(timeout: 3))
+        XCTAssertEqual(grid.cells.element(boundBy: 0).identifier, "emoji.item.🩷")
+        XCTAssertTrue(grid.cells["emoji.item.😂"].isHittable, "Common emoji remain near the front of the full list.")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Common emoji in the full scrollable list"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testBackspaceDeletesASelectionAndPreservesItsNeighbors() {

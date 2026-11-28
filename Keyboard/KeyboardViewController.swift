@@ -106,11 +106,14 @@ final class KeyboardViewController: UIInputViewController {
     private var keyAreaTop: NSLayoutConstraint?
     private var pickerBottom: NSLayoutConstraint?
     private var isSearchingEmoji = false
+    private var emojiSearchContext: HostContext?
+    private var isInsertingEmoji = false
     private var language = Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .burmese
     private var appearance = UserDefaults.standard.string(forKey: "appearance") ?? "System"
     private var autoCapitalize = UserDefaults.standard.object(forKey: "autoCapitalize") as? Bool ?? true
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
+    private var caseChoice: EnglishCaseChoice?
     private var shift = false
     private var capsLockDocument: UUID?
     private var cursorDrag: SpacebarCursorDrag?
@@ -251,6 +254,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        caseChoice = nil
         finishTypingHistory()
         capsLockDocument = nil
         deferredSpace = DeferredEnglishSpace()
@@ -288,6 +292,7 @@ final class KeyboardViewController: UIInputViewController {
         let capitalization = UIAction(title: "Auto-Capitalization", state: autoCapitalize ? .on : .off) { [weak self] _ in
             guard let self else { return }
             autoCapitalize.toggle()
+            caseChoice = nil
             UserDefaults.standard.set(autoCapitalize, forKey: "autoCapitalize")
             manualShiftContext = nil
             updateEnglishShift()
@@ -320,6 +325,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         if manualShiftContext == context { return shift }
         manualShiftContext = nil
+        if caseChoice?.action(at: context) == .retryLowercase { return false }
         guard autoCapitalize, !isSearchingEmoji else { return false }
         let proxy = textDocumentProxy
         switch proxy.keyboardType {
@@ -358,7 +364,9 @@ final class KeyboardViewController: UIInputViewController {
         typedOnSymbols = false
         language = language == .burmese ? .english : .burmese
         emojiPicker?.setReturnLanguage(language)
-        primaryLanguage = language.rawValue
+        // Updating the system's input language emits an asynchronous host callback.
+        // Search changes only our query keyboard; publish its language on exit.
+        if !isSearchingEmoji { primaryLanguage = language.rawValue }
         UserDefaults.standard.set(language.rawValue, forKey: "language")
         manualShiftContext = nil
         symbolPage = nil
@@ -589,9 +597,10 @@ final class KeyboardViewController: UIInputViewController {
         if symbolPage == nil && !isSearchingEmoji {
             bottom.addArrangedSubview(command("Emoji", symbol: "face.smiling") { [weak self] in self?.openEmoji() })
         }
-        let space = command(language.title) { [weak self] in self?.tapSpace() }
+        let space = command(isSearchingEmoji ? "Emoji search" : language.title) { [weak self] in self?.tapSpace() }
         space.accessibilityLabel = "Space"
         space.fill = KeyColors.letter
+        if isSearchingEmoji { space.accessibilityHint = "Adds a space to the emoji search." }
         if !isSearchingEmoji {
             space.accessibilityHint = "Hold and drag left or right to move the cursor."
             let hold = UILongPressGestureRecognizer(target: self, action: #selector(holdSpace(_:)))
@@ -619,6 +628,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func openEmoji() {
+        caseChoice = nil
         finishTypingHistory()
         deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
@@ -627,7 +637,7 @@ final class KeyboardViewController: UIInputViewController {
         guard emojiPicker == nil else { return }
         let picker = EmojiPicker(recent: recentEmoji, language: language, usesSystemBackground: appearance == "System",
                                  topInset: contentTopInset)
-        picker.onInsert = { [weak self] in self?.insertHostText($0) }
+        picker.onInsert = { [weak self] in self?.insertEmoji($0) }
         picker.onDelete = { [weak self] in self?.deleteFromHost() }
         picker.onClose = { [weak self] in self?.closeEmoji() }
         picker.onSearchLayoutChange = { [weak self] in self?.updateEmojiLayout() }
@@ -649,6 +659,8 @@ final class KeyboardViewController: UIInputViewController {
         if isSearchingEmoji != picker.isSearching {
             capsLockDocument = nil
             isSearchingEmoji = picker.isSearching
+            emojiSearchContext = isSearchingEmoji ? HostContext(textDocumentProxy) : nil
+            if !isSearchingEmoji, primaryLanguage != language.rawValue { primaryLanguage = language.rawValue }
             pickerBottom?.isActive = false
             let bottom = isSearchingEmoji ? keyArea.topAnchor : board.safeAreaLayoutGuide.bottomAnchor
             let constraint = picker.bottomAnchor.constraint(equalTo: bottom)
@@ -665,12 +677,15 @@ final class KeyboardViewController: UIInputViewController {
 
     private func closeEmoji() {
         guard let picker = emojiPicker else { return }
+        cancelGestures()
         let wasSearching = isSearchingEmoji
         recentEmoji = picker.recent
         picker.removeFromSuperview()
         emojiPicker = nil
         pickerBottom = nil
         isSearchingEmoji = false
+        emojiSearchContext = nil
+        if primaryLanguage != language.rawValue { primaryLanguage = language.rawValue }
         keyArea.isHidden = false
         if wasSearching {
             capsLockDocument = nil
@@ -683,11 +698,30 @@ final class KeyboardViewController: UIInputViewController {
         updateSuggestions()
     }
 
+    private func insertEmoji(_ value: String) {
+        endEmojiSearchIfHostChanged()
+        // An emoji result edits the host while keeping search available for more results.
+        // Ignore synchronous callbacks and remember the resulting caret for later ones.
+        isInsertingEmoji = true
+        defer {
+            emojiSearchContext = isSearchingEmoji ? HostContext(textDocumentProxy) : nil
+            isInsertingEmoji = false
+        }
+        insertHostText(value)
+    }
+
+    private func endEmojiSearchIfHostChanged() {
+        guard isSearchingEmoji, !isInsertingEmoji,
+              emojiSearchContext != HostContext(textDocumentProxy) else { return }
+        closeEmoji()
+    }
+
     private func finishComposition() {
         editor.finish(in: editHost)
     }
 
     private func insert(_ value: String) {
+        endEmojiSearchIfHostChanged()
         doubleSpace = DoubleSpaceShortcut()
         if symbolPage != nil { typedOnSymbols = true }
         let composes = language == .burmese && symbolPage == nil && BurmeseComposition.canCompose(value)
@@ -746,20 +780,22 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func tapSpace() {
+        endEmojiSearchIfHostChanged()
         deferredSpace = DeferredEnglishSpace()
         if isSearchingEmoji {
             emojiPicker?.appendToQuery(" ")
         } else {
             finishComposition()
             let proxy = textDocumentProxy
-            let before = capitalizePronoun(before: " ", at: HostContext(proxy))
-            if let separator = doubleSpace.separator(for: language, at: before) {
-                typingHistory.observe(before)
+            let edit = capitalizePronoun(before: " ", at: HostContext(proxy))
+            if let separator = doubleSpace.separator(for: language, at: edit.context) {
+                caseChoice = nil
+                typingHistory.observe(edit.context)
                 finishTypingHistory()
                 proxy.deleteBackward()
                 proxy.insertText(separator)
             } else {
-                insertAndObserve(" ", at: before)
+                insertAndObserve(" ", at: edit.context, originalSpelling: edit.original)
             }
         }
         returnToLettersAfterSeparator()
@@ -776,6 +812,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func insertLiteral(_ value: String) {
+        endEmojiSearchIfHostChanged()
         if isSearchingEmoji {
             if value == "\n" { emojiPicker?.confirmSearch() }
             else { emojiPicker?.appendToQuery(value) }
@@ -790,12 +827,13 @@ final class KeyboardViewController: UIInputViewController {
         allowsEnglishWordEdits && textDocumentProxy.permitsPersonalSuggestions
     }
 
-    private func capitalizePronoun(before input: String, at context: HostContext) -> HostContext {
+    private func capitalizePronoun(before input: String, at context: HostContext) -> (context: HostContext, original: String?) {
         guard autoCapitalize, context.before?.last == "i", allowsAutomaticWordSpacing,
+              caseChoice?.action(at: context) != .keepSpelling,
               textDocumentProxy.autocapitalizationType != .some(.none),
-              let pronoun = EnglishToken.standalonePronoun(at: context, before: input) else { return context }
-        _ = pronoun.replace(with: "I", at: context, in: editHost)
-        return editHost.context
+              let pronoun = EnglishToken.standalonePronoun(at: context, before: input) else { return (context, nil) }
+        let changed = pronoun.replace(with: "I", at: context, in: editHost)
+        return (editHost.context, changed ? pronoun.word : nil)
     }
 
     private func insertHostText(_ value: String, applyingWordSpacing: Bool = false) {
@@ -807,7 +845,8 @@ final class KeyboardViewController: UIInputViewController {
              (language == .english && deferredSpace.consume(before: value, at: context)))
         deferredSpace = DeferredEnglishSpace()
         let insertion = addSpace ? " " + value : value
-        insertAndObserve(insertion, at: capitalizePronoun(before: insertion, at: context))
+        let edit = capitalizePronoun(before: insertion, at: context)
+        insertAndObserve(insertion, at: edit.context, originalSpelling: edit.original)
         didType()
     }
 
@@ -827,15 +866,28 @@ final class KeyboardViewController: UIInputViewController {
         persist(typingHistory.finish())
     }
 
-    private func insertAndObserve(_ value: String, at before: HostContext) {
-        guard learnsEnglish else {
-            typingHistory = EnglishTypingHistory()
-            textDocumentProxy.insertText(value)
-            return
+    private func insertAndObserve(_ value: String, at before: HostContext, originalSpelling: String? = nil) {
+        let choice = caseChoice?.action(at: before)
+        let automatic = language == .english && autoCapitalize && shift && manualShiftContext == nil && capsLockDocument == nil
+        let manualLower = language == .english && !shift && (manualShiftContext == before || choice == .retryLowercase)
+        var next: EnglishCaseChoice.Action?
+        if let originalSpelling, value.count == 1 { next = .undoCapitalization(original: originalSpelling) }
+        else if choice == .keepSpelling, value.count == 1,
+                let key = value.first, key.isWhitespace || key.isPunctuation { next = .afterKeptSpelling }
+        else if let letter = value.last, value == String(letter) || value == " " + String(letter) {
+            if automatic && letter.isUppercase && EnglishToken.isLetter(letter) { next = .automaticInitial }
+            if manualLower && letter.isLowercase && EnglishToken.isLetter(letter) { next = .keepSpelling }
         }
-        let automatic = shift && manualShiftContext == nil && capsLockDocument == nil
+        caseChoice = nil
         textDocumentProxy.insertText(value)
+        let learn = learnsEnglish
+        guard learn || next != nil else { typingHistory = EnglishTypingHistory(); return }
         let after = HostContext(textDocumentProxy)
+        if let next, after != before, before.selection?.isEmpty != false,
+           after.matchesCaret(in: before, before: (before.before ?? "") + value, after: before.after ?? "") {
+            caseChoice = EnglishCaseChoice(action: next, caret: after)
+        }
+        guard learn else { typingHistory = EnglishTypingHistory(); return }
         persist(typingHistory.inserted(value, from: before, to: after, automaticInitial: automatic))
         settleWord?.cancel()
         if typingHistory.awaitsSettlement {
@@ -858,6 +910,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func backspace() {
+        endEmojiSearchIfHostChanged()
         doubleSpace = DoubleSpaceShortcut()
         if isSearchingEmoji {
             emojiPicker?.deleteQueryCharacter()
@@ -869,9 +922,12 @@ final class KeyboardViewController: UIInputViewController {
     private func deleteFromHost() {
         deferredSpace = DeferredEnglishSpace()
         manualShiftContext = nil
-        let before = learnsEnglish ? HostContext(textDocumentProxy) : nil
+        let before = editHost.context
+        let lastChoice = caseChoice
+        caseChoice = nil
         editor.backspace(in: editHost)
-        if let before { typingHistory.deleted(from: before, to: HostContext(textDocumentProxy)) }
+        caseChoice = lastChoice?.afterBackspace(from: before, in: editHost)
+        if learnsEnglish { typingHistory.deleted(from: before, to: editHost.context) }
         updateEnglishShift()
         updateSuggestions()
     }
@@ -910,7 +966,16 @@ final class KeyboardViewController: UIInputViewController {
         let result = HostContext(textDocumentProxy)
         let accepted = candidate.confirmed(from: context, to: result)
         if accepted {
-            if !candidate.title.contains(" "), language == .burmese || learnsEnglish {
+            caseChoice = nil
+            if candidate.action == .keep {
+                caseChoice = EnglishCaseChoice(action: .keepSpelling, caret: result)
+                typingHistory = EnglishTypingHistory()
+                // Track the boundary so the next typed word can be learned normally.
+                // Keeping this spelling does not record a dictionary choice.
+                if learnsEnglish, (result.after ?? "").isEmpty {
+                    _ = typingHistory.accepted(candidate.title, from: context, to: result)
+                }
+            } else if !candidate.title.contains(" "), language == .burmese || learnsEnglish {
                 let previous = language == .english ? typingHistory.accepted(candidate.title, from: context, to: result) : nil
                 LearnedWordStore.shared.record(candidate.title, language: language, previous: previous)
             } else {
@@ -985,7 +1050,10 @@ final class KeyboardViewController: UIInputViewController {
             guard token != nil, selected.isEmpty else { return }
         } else if before.isEmpty && selected.isEmpty { return }
         let immediate = token.flatMap { Completions.joinedPhrase(for: $0, allCaps: allCaps) }
-        if let immediate { addSuggestion(immediate, context: context, language: mode) }
+        if let immediate, let token {
+            addSuggestion(immediate, context: context, language: mode)
+            addSuggestion(Completion(title: token.word, suffix: "", action: .keep), context: context, language: mode)
+        }
         lookup = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard !Task.isCancelled else { return }
@@ -1005,7 +1073,7 @@ final class KeyboardViewController: UIInputViewController {
             }.value
             guard !Task.isCancelled, self.suggestionRequest == request, self.suggestionContext == context,
                   self.textDocumentProxy.permitsPersonalSuggestions else { return }
-            let additional = results.filter { $0 != immediate }
+            let additional = results.filter { $0 != immediate && (immediate == nil || $0.action != .keep) }
             guard !additional.isEmpty else { return }
             for candidate in additional { self.addSuggestion(candidate, context: context, language: mode) }
         }
@@ -1018,7 +1086,8 @@ final class KeyboardViewController: UIInputViewController {
         button.backgroundColor = UIColor(white: 0.5, alpha: 0.015)
         button.visualInsets = UIEdgeInsets(top: contentTopInset, left: 0, bottom: keyArea.spacing, right: 0)
         button.accessibilityIdentifier = "completion." + candidate.title
-        button.setTitle(candidate.title, for: .normal)
+        button.setTitle(candidate.action == .keep ? "“" + candidate.title + "”" : candidate.title, for: .normal)
+        if candidate.action == .keep { button.accessibilityLabel = "Keep " + candidate.title }
         button.titleLabel?.font = .systemFont(ofSize: mode == .burmese ? 16 : 17)
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.tintColor = KeyColors.ink
@@ -1037,7 +1106,8 @@ final class KeyboardViewController: UIInputViewController {
             button.menu = UIMenu(children: [forget])
         }
         // A later result must never move the suggestion already under a finger.
-        guard let slot = [1, 0, 2].map({ candidates.arrangedSubviews[$0] }).first(where: { $0.subviews.isEmpty })
+        let slots = candidate.action == .keep ? [2] : [1, 0, 2]
+        guard let slot = slots.map({ candidates.arrangedSubviews[$0] }).first(where: { $0.subviews.isEmpty })
         else { return }
         button.frame = slot.bounds
         button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -1046,7 +1116,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {
+        // A host tap can reaffirm the same insertion point. It still returns focus
+        // to the document, even when its before/after context has not changed.
+        if isSearchingEmoji, !isInsertingEmoji { closeEmoji() }
         let context = HostContext(textDocumentProxy)
+        if caseChoice?.caret != context { caseChoice = nil }
         typingHistory.observe(context)
         deferredSpace.observe(context)
         doubleSpace.selectionChanged(to: context)
@@ -1056,7 +1130,11 @@ final class KeyboardViewController: UIInputViewController {
     }
     override func textDidChange(_ textInput: UITextInput?) {
         guard isViewLoaded else { return }
+        // UIKit also sends text-change callbacks when a tap reaffirms the host's
+        // existing caret (including an empty field), without changing its context.
+        if isSearchingEmoji, !isInsertingEmoji { closeEmoji() }
         let context = HostContext(textDocumentProxy)
+        if caseChoice?.caret != context { caseChoice = nil }
         typingHistory.observe(context)
         deferredSpace.observe(context)
         editor.check(context, in: editHost)
@@ -1064,4 +1142,5 @@ final class KeyboardViewController: UIInputViewController {
         if currentReturnKey != textDocumentProxy.returnKeyType { rebuild() }
         updateSuggestions()
     }
+
 }

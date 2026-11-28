@@ -3,7 +3,7 @@ UNICODE LICENSE V3
 COPYRIGHT AND PERMISSION NOTICE
 
 Copyright © 1991-2026 Unicode, Inc.
-CLDR 47 annotations © 2004-2025 Unicode, Inc.
+CLDR 48 annotations © 1991-2025 Unicode, Inc.
 
 NOTICE TO USER: Carefully read the following legal agreement. BY
 DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR

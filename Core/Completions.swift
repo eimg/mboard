@@ -14,7 +14,7 @@ struct Completion: Equatable {
         case .keep:
             guard result == original, original.document != nil, original.selection?.isEmpty != false,
                   let token = EnglishToken(before: before, after: after) else { return false }
-            return token.left == title && token.right.isEmpty
+            return token.word == title
         case .append:
             return result.matchesCaret(in: original, before: before + suffix, after: after)
         case .selection:
@@ -26,7 +26,7 @@ struct Completion: Equatable {
     }
 }
 
-private extension HostContext {
+extension HostContext {
     // A host may expose a sliding window on either side of the caret.
     func matchesCaret(in original: HostContext, before expectedLeft: String, after expectedRight: String) -> Bool {
         guard original.document != nil, document == original.document, selection?.isEmpty != false else { return false }
@@ -36,6 +36,39 @@ private extension HostContext {
         return left.isEmpty == expectedLeft.isEmpty && right.isEmpty == expectedRight.isEmpty
             && left.suffix(leftCount).elementsEqual(expectedLeft.utf8.suffix(leftCount))
             && right.prefix(rightCount).elementsEqual(expectedRight.utf8.prefix(rightCount))
+    }
+}
+
+/// A decision about one verified insertion point. It is never persisted as a spelling preference.
+struct EnglishCaseChoice {
+    enum Action: Equatable {
+        case keepSpelling, afterKeptSpelling, retryLowercase, automaticInitial, undoCapitalization(original: String)
+    }
+    let action: Action
+    let caret: HostContext
+
+    func action(at context: HostContext) -> Action? {
+        guard caret.document != nil, caret == context, context.selection?.isEmpty != false else { return nil }
+        return action
+    }
+
+    @MainActor func afterBackspace(from before: HostContext, in host: BurmeseEditHost) -> Self? {
+        let after = host.context
+        guard let action = action(at: before), after != before, let left = before.before, !left.isEmpty,
+              after.matchesCaret(in: before, before: String(left.dropLast()), after: before.after ?? "")
+        else { return nil }
+        switch action {
+        case .afterKeptSpelling:
+            return Self(action: .keepSpelling, caret: after)
+        case .automaticInitial:
+            return Self(action: .retryLowercase, caret: after)
+        case .undoCapitalization(let original):
+            guard let token = EnglishToken(before: after.before ?? "", after: after.after ?? ""),
+                  token.left == original.uppercased(), token.right.isEmpty,
+                  token.replace(with: original, at: after, in: host) else { return nil }
+            return Self(action: .keepSpelling, caret: host.context)
+        default: return nil
+        }
     }
 }
 
@@ -384,6 +417,21 @@ enum Completions {
         } else {
             if let contraction, secondaryContraction { offer(contraction) }
             if !known { for guess in spellings { offer(guess) } }
+        }
+        // Keep the literal available beside a correction, even when all three slots are contested.
+        if source == "i" && !choices.contains(where: { $0.title == "I" }) {
+            choices.insert(Completion(title: "I", suffix: "", action: .replace(token)), at: 0)
+        }
+        let correction = choices.first { candidate in
+            if case .replace = candidate.action { return true }
+            return false
+        }
+        if let correction,
+           !choices.contains(where: { $0.action == .keep }) {
+            let first = choices[0]
+            let second = first == correction ? choices.dropFirst().first : correction
+            choices = [first, second].compactMap { $0 }
+            choices.append(Completion(title: source, suffix: "", action: .keep))
         }
         return choices
     }

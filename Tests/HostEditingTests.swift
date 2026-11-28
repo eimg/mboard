@@ -60,6 +60,25 @@ private final class EditingHost: BurmeseEditHost {
 }
 
 final class HostEditingTests: XCTestCase {
+    @MainActor func testCapitalizationUndoRequiresTheOriginalCaretAndAnActualDeletion() {
+        let host = EditingHost("say I,", right: " here")
+        let caret = host.context
+        let undo = EnglishCaseChoice(action: .undoCapitalization(original: "i"), caret: caret)
+        XCTAssertNil(undo.afterBackspace(from: caret, in: host))
+        host.selected = "selection"
+        XCTAssertNil(undo.action(at: host.context))
+        host.selected = nil
+        host.moveCaret(byUTF16: -2)
+        XCTAssertNil(undo.action(at: host.context))
+        host.moveCaret(byUTF16: 2)
+        host.deleteBackward()
+        let kept = undo.afterBackspace(from: caret, in: host)
+        XCTAssertEqual(host.text, "say i here")
+        XCTAssertEqual(kept?.action(at: host.context), .keepSpelling)
+        host.document = UUID()
+        XCTAssertNil(kept?.action(at: host.context))
+    }
+
     @MainActor func testEnglishReplacementPreservesNeighborsAndEndsAtWordBoundary() async throws {
         for (left, right, result) in [("he", "lo", "hello"), ("", "helo", "hello"),
                                      ("thankyo", "", "thank you"), ("thanky", "", "thank you"),

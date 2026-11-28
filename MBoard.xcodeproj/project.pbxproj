@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        EAA000000000000000000001 /* EmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA000000000000000000002 /* EmojiCatalog.swift */; };
 		B11000000000000000000001 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
 		B11000000000000000000000 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
 		B02000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01000000000000000000001 /* PrivacyInfo.xcprivacy */; };
@@ -63,6 +64,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        EAA000000000000000000002 /* EmojiCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiCatalog.swift; sourceTree = "<group>"; };
 		B10000000000000000000000 /* Brand.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Brand.xcassets; path = Shared/Brand.xcassets; sourceTree = "<group>"; };
 		B01000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B01000000000000000000000 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				E03C7204A53E5071D4E7037F /* BurmeseComposition.swift */,
+                EAA000000000000000000002 /* EmojiCatalog.swift */,
 				23018F244F02631D0297641F /* Completions.swift */,
 				4AD126C42AE14DAB89518A29 /* LearnedWords.swift */,
 				E4E9C405C2A9F0CF1B3961AA /* KeyboardLayout.swift */,
@@ -363,6 +366,7 @@
 				EA290979DFA6445BB39DB7FE /* LearnedWords.swift in Sources */,
 				22A05C65DBFE3332C4F97F63 /* KeyboardLayout.swift in Sources */,
 				911DA214BCC4CDCB3E15B544 /* EmojiPicker.swift in Sources */,
+                EAA000000000000000000001 /* EmojiCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
