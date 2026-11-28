@@ -79,7 +79,7 @@ final class KeyboardTipsView: KeyboardPanelView {
         stack.spacing = 6
         stack.isLayoutMarginsRelativeArrangement = true
         stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
-        stack.backgroundColor = KeyColors.letter
+        stack.backgroundColor = .secondarySystemGroupedBackground
         stack.layer.cornerRadius = 10
         stack.layer.cornerCurve = .continuous
         stack.isAccessibilityElement = true

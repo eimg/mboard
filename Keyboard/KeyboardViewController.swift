@@ -97,6 +97,7 @@ final class KeyboardViewController: UIInputViewController {
     private let contentTopInset: CGFloat = 10
     private let keyArea = UIStackView()
     private let toolbar = UIStackView()
+    private lazy var toolbarHeight = toolbar.heightAnchor.constraint(equalToConstant: 33)
     private let rows = UIStackView()
     private let candidates = UIStackView()
     private weak var highlightedSuggestion: UIButton?
@@ -106,7 +107,11 @@ final class KeyboardViewController: UIInputViewController {
     private var height: NSLayoutConstraint?
     private var keyAreaTop: NSLayoutConstraint?
     private var pickerBottom: NSLayoutConstraint?
-    private var isSearchingEmoji = false
+    private var isSearchingEmoji = false {
+        didSet {
+            toolbar.isHidden = isSearchingEmoji
+        }
+    }
     private var emojiSearchContext: HostContext?
     private var isInsertingEmoji = false
     private var language = Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .burmese
@@ -155,6 +160,8 @@ final class KeyboardViewController: UIInputViewController {
         board.addSubview(keyArea)
         let top = keyArea.topAnchor.constraint(equalTo: board.topAnchor, constant: contentTopInset)
         keyAreaTop = top
+        // Allow the vertical stack to collapse the toolbar during emoji search.
+        toolbarHeight.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
             board.leadingAnchor.constraint(equalTo: view.leadingAnchor), board.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             board.topAnchor.constraint(equalTo: view.topAnchor), board.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -162,7 +169,7 @@ final class KeyboardViewController: UIInputViewController {
             keyArea.trailingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.trailingAnchor, constant: -4),
             top,
             keyArea.bottomAnchor.constraint(equalTo: board.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            toolbar.heightAnchor.constraint(equalToConstant: 33)
+            toolbarHeight
         ])
         let size = view.heightAnchor.constraint(equalToConstant: 275 + contentTopInset)
         size.priority = UILayoutPriority(999)
@@ -241,10 +248,12 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
-        let contentHeight: CGFloat = compact ? 199 : (keyboardPanel?.preferredPortraitHeight ?? 275)
+        var contentHeight: CGFloat = compact ? 199 : (keyboardPanel?.preferredPortraitHeight ?? 275)
         var panelHeight: CGFloat = 0
         if let emojiPicker, emojiPicker.isSearching {
+            contentHeight -= toolbarHeight.constant + keyArea.spacing
             panelHeight = emojiPicker.showsResults ? (compact ? 92 : 140) : 42
+            panelHeight += keyArea.spacing
         }
         height?.constant = contentTopInset + contentHeight + panelHeight
         keyAreaTop?.constant = contentTopInset + panelHeight
@@ -384,7 +393,6 @@ final class KeyboardViewController: UIInputViewController {
         doubleSpace = DoubleSpaceShortcut()
         typedOnSymbols = false
         language = language == .burmese ? .english : .burmese
-        emojiPicker?.setReturnLanguage(language)
         // Updating the system's input language emits an asynchronous host callback.
         // Search changes only our query keyboard; publish its language on exit.
         if !isSearchingEmoji { primaryLanguage = language.rawValue }
@@ -659,7 +667,7 @@ final class KeyboardViewController: UIInputViewController {
         finishComposition()
         cancelGestures()
         guard emojiPicker == nil else { return }
-        let picker = EmojiPicker(recent: recentEmoji, language: language, topInset: contentTopInset)
+        let picker = EmojiPicker(recent: recentEmoji, topInset: contentTopInset)
         picker.onInsert = { [weak self] in self?.insertEmoji($0) }
         picker.onDelete = { [weak self] in self?.deleteFromHost() }
         picker.onClose = { [weak self] in self?.closeEmoji() }
@@ -686,7 +694,7 @@ final class KeyboardViewController: UIInputViewController {
             if !isSearchingEmoji, primaryLanguage != language.rawValue { primaryLanguage = language.rawValue }
             pickerBottom?.isActive = false
             let bottom = isSearchingEmoji ? keyArea.topAnchor : board.safeAreaLayoutGuide.bottomAnchor
-            let constraint = picker.bottomAnchor.constraint(equalTo: bottom)
+            let constraint = picker.bottomAnchor.constraint(equalTo: bottom, constant: isSearchingEmoji ? -keyArea.spacing : 0)
             constraint.isActive = true
             pickerBottom = constraint
             keyArea.isHidden = !isSearchingEmoji

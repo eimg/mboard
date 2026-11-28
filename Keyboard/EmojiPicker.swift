@@ -137,7 +137,6 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let stack = UIStackView()
     private let header = UIStackView()
     private let backButton = KeyButton(title: "Back", symbol: "arrow.left")
-    private let lettersButton = KeyButton(title: "", modifier: true)
     private let deleteButton = KeyButton(title: "Delete", symbol: "delete.left")
     private let doneButton = KeyButton(title: "Done", modifier: true)
     private let searchField = UIStackView()
@@ -146,7 +145,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private let heading = UILabel()
     private let grid = EmojiGrid()
 
-    init(recent: [EmojiItem], language: Language, topInset: CGFloat) {
+    init(recent: [EmojiItem], topInset: CGFloat) {
         self.recent = recent
         super.init(frame: .zero)
         stack.axis = .vertical
@@ -157,16 +156,15 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -3),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)])
+        header.isLayoutMarginsRelativeArrangement = true
+        header.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 7, bottom: 0, trailing: 7)
         header.spacing = 4
         configureHeaderButton(backButton) { [weak self] in self?.goBack() }
-        setReturnLanguage(language)
-        configureHeaderButton(lettersButton) { [weak self] in self?.onClose?() }
         configureHeaderButton(deleteButton) { [weak self] in self?.onDelete?() }
         configureHeaderButton(doneButton, width: 50) { [weak self] in self?.onClose?() }
         doneButton.accessibilityIdentifier = "emoji.search.done"
         doneButton.accessibilityHint = "Closes emoji search and returns to typing."
         header.addArrangedSubview(backButton)
-        header.addArrangedSubview(lettersButton)
         header.addArrangedSubview(searchField)
         header.addArrangedSubview(doneButton)
         header.addArrangedSubview(deleteButton)
@@ -204,13 +202,6 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     deinit { searchTask?.cancel() }
 
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
-
-    func setReturnLanguage(_ language: Language) {
-        let title = language == .english ? "abc" : "ကခ"
-        lettersButton.setTitle(title, for: .normal)
-        lettersButton.titleLabel?.font = KeyButton.labelFont(for: title, size: 16)
-        lettersButton.accessibilityLabel = language == .english ? "Return to English keyboard" : "Return to Burmese keyboard"
-    }
 
     private func configureSearchField() {
         searchField.backgroundColor = .tertiarySystemFill
@@ -307,6 +298,7 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
     private func goBack() {
         if variants != nil { variants = nil; refresh() }
         else if isSearching { setSearchActive(false) }
+        else { onClose?() }
     }
 
     private func refresh() {
@@ -327,8 +319,13 @@ final class EmojiPicker: UIView, UICollectionViewDataSource, UICollectionViewDel
             }
         }
         let showingAllEmoji = !isSearching && variants == nil
-        backButton.isHidden = showingAllEmoji
-        lettersButton.isHidden = !showingAllEmoji
+        if showingAllEmoji {
+            backButton.accessibilityLabel = "Back to Keyboard"
+        } else if isSearching && variants != nil {
+            backButton.accessibilityLabel = "Back to emoji search results"
+        } else {
+            backButton.accessibilityLabel = "Back to emoji list"
+        }
         deleteButton.isHidden = !showingAllEmoji
         doneButton.isHidden = !isSearching
         queryButton.display(query, editing: isSearching)

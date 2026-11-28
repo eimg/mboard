@@ -450,17 +450,24 @@ final class TypingTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "က။ " + letter + ".  12 q")
     }
 
-    func testEmojiReturnKeyFollowsLanguageChangedDuringSearch() {
+    func testEmojiBackReturnsToActiveKeyboard() {
         let app = XCUIApplication()
         app.launch()
         app.textViews["practice"].tap()
         selectKeyboard("Burmese", in: app)
         app.buttons["Emoji"].tap()
-        XCTAssertTrue(app.buttons["Return to Burmese keyboard"].isHittable)
+        let back = app.buttons["Back to Keyboard"]
+        let backFrame = back.frame
+        XCTAssertGreaterThan(app.buttons["emoji.search.query"].frame.width, backFrame.width)
+        back.tap()
+        XCTAssertTrue(app.buttons["Switch to English"].isHittable)
+        app.buttons["Emoji"].tap()
         app.buttons["emoji.search.query"].tap()
+        XCTAssertEqual(app.buttons["Back to emoji list"].frame.midX, backFrame.midX, accuracy: 1)
+        XCTAssertEqual(app.buttons["Back to emoji list"].frame.width, backFrame.width, accuracy: 1)
         app.buttons["Switch to English"].tap()
-        app.buttons["Back"].tap()
-        app.buttons["Return to English keyboard"].tap()
+        app.buttons["Back to emoji list"].tap()
+        app.buttons["Back to Keyboard"].tap()
         XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
     }
 
@@ -560,11 +567,22 @@ final class TypingTests: XCTestCase {
         let field = app.textViews["practice"]
         field.tap()
         selectKeyboard("English", in: app)
+        let menu = app.buttons["MBoard Menu"]
+        let hide = app.buttons["Hide Keyboard"]
+        let space = app.buttons["Space"]
+        let normalKeyHeight = space.frame.height
         for query in ["", "cat"] {
             app.buttons["Emoji"].tap()
             app.buttons["emoji.search.query"].tap()
             for letter in query { app.buttons["key." + String(letter)].tap() }
+            XCTAssertFalse(menu.exists)
+            XCTAssertFalse(hide.exists)
+            XCTAssertEqual(space.frame.height, normalKeyHeight, accuracy: 2)
+            let searchBottom = app.buttons["emoji.search.query"].frame.maxY
+            XCTAssertEqual(app.buttons["key.q"].frame.minY - searchBottom, 8, accuracy: 1)
             app.buttons["emoji.search.done"].tap()
+            XCTAssertTrue(menu.isHittable)
+            XCTAssertTrue(hide.isHittable)
             XCTAssertTrue(app.buttons["Emoji"].waitForExistence(timeout: 3))
             XCTAssertFalse(app.buttons["emoji.search.query"].exists)
             XCTAssertEqual(field.value as? String, "")
@@ -594,6 +612,13 @@ final class TypingTests: XCTestCase {
             XCTAssertTrue(emoji.waitForExistence(timeout: 3))
             XCTAssertTrue(emoji.isHittable)
             if query == "lol" { XCTAssertFalse(app.collectionViews["emoji.grid"].cells["emoji.item.🍭"].exists) }
+            if query == "thanks" {
+                emoji.press(forDuration: 0.8)
+                app.buttons["Back to emoji search results"].tap()
+                XCTAssertEqual(search.value as? String, query)
+                XCTAssertTrue(emoji.waitForExistence(timeout: 3))
+                XCTAssertTrue(app.buttons["Back to emoji list"].isHittable)
+            }
             if query == "pink heart" {
                 emoji.tap()
                 XCTAssertEqual(field.value as? String, "🩷")
@@ -696,10 +721,10 @@ final class TypingTests: XCTestCase {
         XCTAssertLessThan(cat.frame.maxY, search.frame.minY)
         cat.tap()
         XCTAssertEqual(field.value as? String, mixedText + "🐱")
-        app.buttons["Back"].tap()
+        app.buttons["Back to emoji list"].tap()
         XCTAssertTrue(search.isHittable)
         XCTAssertFalse(firstEmoji.isHittable, "Returning from search should restore the scroll position.")
-        app.buttons["Return to English keyboard"].tap()
+        app.buttons["Back to Keyboard"].tap()
         XCTAssertTrue(app.buttons["Switch to Burmese"].isHittable)
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertEqual(field.value as? String, mixedText)
