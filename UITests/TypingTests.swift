@@ -76,6 +76,7 @@ final class TypingTests: XCTestCase {
         app.buttons["key.က"].tap()
         XCTAssertEqual(field.value as? String, "က္က")
         app.buttons["Switch to English"].tap()
+        snapshot("English keyboard")
         openTips("English")
         XCTAssertTrue(app.otherElements["typingTips.english.cursor"].isHittable)
         XCTAssertTrue(app.otherElements["typingTips.english.period"].isHittable)
@@ -322,6 +323,70 @@ final class TypingTests: XCTestCase {
         keepTypo.tap()
         key("x")
         XCTAssertEqual(field.value as? String, "i i i. i thankyo x")
+    }
+
+    func testAutoCapitalizationPanelChangesShiftAtTheCaret() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textViews["practice"]
+        field.tap()
+        selectKeyboard("English", in: app)
+
+        func openPanel() {
+            app.buttons["MBoard Menu"].tap()
+            app.buttons["Auto-Capitalization"].tap()
+            XCTAssertTrue(app.staticTexts["All enabled modes capitalize sentence starts."].waitForExistence(timeout: 3))
+        }
+
+        func selectStyle(_ style: String) {
+            openPanel()
+            let choice = app.buttons["capitalization." + style]
+            choice.tap()
+            XCTAssertTrue(choice.isSelected)
+            app.buttons["Back to Keyboard"].tap()
+            XCTAssertTrue(app.buttons["MBoard Menu"].waitForExistence(timeout: 3))
+        }
+
+        selectStyle("off")
+        XCTAssertTrue(app.buttons["key.t"].isHittable)
+        selectStyle("sentenceStarts")
+        XCTAssertTrue(app.buttons["key.T"].isHittable)
+        app.buttons["Switch to Burmese"].tap()
+        app.buttons["key.က"].tap()
+        app.buttons["Switch to English"].tap()
+        XCTAssertTrue(app.buttons["key.t"].isHittable)
+
+        selectStyle("firstEnglishWord")
+        app.buttons["key.T"].tap()
+        app.buttons["Space"].tap()
+        XCTAssertTrue(app.buttons["key.m"].isHittable)
+        selectStyle("everyEnglishWord")
+        app.buttons["key.M"].tap()
+        XCTAssertEqual(field.value as? String, "က T M")
+
+        openPanel()
+        let sentenceStarts = app.buttons["capitalization.sentenceStarts"]
+        let everyWord = app.buttons["capitalization.everyEnglishWord"]
+        sentenceStarts.tap()
+        XCTAssertTrue(sentenceStarts.isSelected)
+        XCTAssertFalse(everyWord.isSelected)
+        everyWord.tap()
+        for (style, example) in [("off", "hello. see you soon."), ("sentenceStarts", "ဒီနေ့ team meeting"),
+                                 ("firstEnglishWord", "ဒီနေ့ Team meeting"), ("everyEnglishWord", "ဒီနေ့ Team Meeting")] {
+            let choice = app.buttons["capitalization." + style]
+            XCTAssertTrue(choice.isHittable)
+            XCTAssertEqual(choice.value as? String, example)
+            XCTAssertEqual(choice.isSelected, style == "everyEnglishWord")
+        }
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Auto-Capitalization choices"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.buttons["Back to Keyboard"].tap()
+        XCTAssertEqual(field.value as? String, "က T M")
+        app.buttons["Space"].tap()
+        XCTAssertTrue(app.buttons["key.T"].isHittable)
     }
 
     func testCapitalizesStandalonePronounOnSpaceAndPunctuation() {

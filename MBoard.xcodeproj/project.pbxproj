@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
         EAB000000000000000000001 /* KeyboardTipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB000000000000000000002 /* KeyboardTipsView.swift */; };
+        EAB000000000000000000003 /* KeyboardPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB000000000000000000004 /* KeyboardPanelView.swift */; };
+        EAB000000000000000000005 /* KeyboardCapitalizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB000000000000000000006 /* KeyboardCapitalizationView.swift */; };
         EAA000000000000000000001 /* EmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA000000000000000000002 /* EmojiCatalog.swift */; };
 		B11000000000000000000001 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
 		B11000000000000000000000 /* Brand.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000000 /* Brand.xcassets */; };
@@ -66,6 +68,8 @@
 
 /* Begin PBXFileReference section */
         EAB000000000000000000002 /* KeyboardTipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardTipsView.swift; sourceTree = "<group>"; };
+        EAB000000000000000000004 /* KeyboardPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardPanelView.swift; sourceTree = "<group>"; };
+        EAB000000000000000000006 /* KeyboardCapitalizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCapitalizationView.swift; sourceTree = "<group>"; };
         EAA000000000000000000002 /* EmojiCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiCatalog.swift; sourceTree = "<group>"; };
 		B10000000000000000000000 /* Brand.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Brand.xcassets; path = Shared/Brand.xcassets; sourceTree = "<group>"; };
 		B01000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -211,6 +215,8 @@
 				1FA6FA22C147B663FBCDFDD9 /* KeyButton.swift */,
 				D0E0314A5653A3734FEFB564 /* KeyboardViewController.swift */,
                 EAB000000000000000000002 /* KeyboardTipsView.swift */,
+                EAB000000000000000000004 /* KeyboardPanelView.swift */,
+                EAB000000000000000000006 /* KeyboardCapitalizationView.swift */,
 				B01000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				BB53284C4A2E48DA948016B8 /* Info.plist */,
 				92EEE2A9D3856B50E2F10BF2 /* EmojiPicker.swift */,
@@ -365,6 +371,8 @@
 				52966F44E0EEC36AAF510923 /* KeyButton.swift in Sources */,
 				F895B99EB29FF48250C15A88 /* KeyboardViewController.swift in Sources */,
                 EAB000000000000000000001 /* KeyboardTipsView.swift in Sources */,
+                EAB000000000000000000003 /* KeyboardPanelView.swift in Sources */,
+                EAB000000000000000000005 /* KeyboardCapitalizationView.swift in Sources */,
 				D24B1F89DF7858278209C620 /* BurmeseComposition.swift in Sources */,
 				777F90BAD79D19F37AB68DC8 /* Completions.swift in Sources */,
 				EA290979DFA6445BB39DB7FE /* LearnedWords.swift in Sources */,

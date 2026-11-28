@@ -2,6 +2,7 @@
 
 ## 0.1.1 — in development
 
+- Choose when English capitals appear in mixed Burmese text. The Auto-Capitalization panel shows examples and saves each choice as you tap. The blue `abc` or `ကခ` key switches languages.
 - The keyboard now follows the system appearance. The logo and hide button have more clearance from the rounded top corners. Tap the logo for typing settings and Typing Tips. Tips follow the active language: Burmese explains hold-and-release alternatives and stacking with ္; English explains cursor dragging and double-Space punctuation. Back and Hide Keyboard stay above the scrolling tips. The typing toolbar also includes Hide Keyboard.
 - Emoji search returns to typing when you tap the app’s input, including its existing cursor position, or change its selection. A Done button and an “Emoji search” spacebar make the active input mode clearer.
 - The full emoji list now puts saved recents and 144 everyday emoji first. Updated Unicode data and English/Burmese keywords make common searches such as “happy”, “thanks”, “love” and “lol” useful, with newer emoji shown on supported iOS versions.

@@ -9,6 +9,8 @@ enum KeyColors {
     }
     static let letter = adaptive(light: .white, dark: .systemGray3)
     static let modifier = adaptive(light: .systemGray4, dark: .systemGray5)
+    static let languageSwitch = adaptive(light: UIColor(red: 0.75, green: 0.86, blue: 1, alpha: 1),
+                                         dark: UIColor(red: 0.13, green: 0.29, blue: 0.45, alpha: 1))
     static let pressed = adaptive(light: .systemGray3, dark: .systemGray2)
     static let ink = UIColor.label
 }

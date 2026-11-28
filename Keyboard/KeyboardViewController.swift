@@ -102,7 +102,7 @@ final class KeyboardViewController: UIInputViewController {
     private weak var highlightedSuggestion: UIButton?
     private let menuButton = UIButton(type: .system)
     private let hideButton = UIButton(type: .system)
-    private var typingTips: KeyboardTipsView?
+    private var keyboardPanel: KeyboardPanelView?
     private var height: NSLayoutConstraint?
     private var keyAreaTop: NSLayoutConstraint?
     private var pickerBottom: NSLayoutConstraint?
@@ -110,7 +110,7 @@ final class KeyboardViewController: UIInputViewController {
     private var emojiSearchContext: HostContext?
     private var isInsertingEmoji = false
     private var language = Language(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .burmese
-    private var autoCapitalize = UserDefaults.standard.object(forKey: "autoCapitalize") as? Bool ?? true
+    private var capitalizationStyle = CapitalizationStyle(defaults: .standard)
     private var wordSuggestions = UserDefaults.standard.object(forKey: "wordSuggestions") as? Bool ?? true
     private var manualShiftContext: HostContext?
     private var caseChoice: EnglishCaseChoice?
@@ -227,6 +227,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        capitalizationStyle = CapitalizationStyle(defaults: .standard)
         manualShiftContext = nil
         updateEnglishShift()
         updateSuggestions()
@@ -240,7 +241,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
-        let contentHeight: CGFloat = compact ? 199 : (typingTips?.preferredPortraitHeight ?? 275)
+        let contentHeight: CGFloat = compact ? 199 : (keyboardPanel?.preferredPortraitHeight ?? 275)
         var panelHeight: CGFloat = 0
         if let emojiPicker, emojiPicker.isSearching {
             panelHeight = emojiPicker.showsResults ? (compact ? 92 : 140) : 42
@@ -257,7 +258,7 @@ final class KeyboardViewController: UIInputViewController {
         deferredSpace = DeferredEnglishSpace()
         doubleSpace = DoubleSpaceShortcut()
         typedOnSymbols = false
-        closeTypingTips(resumingTyping: false)
+        closeKeyboardPanel(resumingTyping: false)
         closeEmoji()
         finishComposition()
         cancelGestures()
@@ -265,15 +266,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func configureSettingsMenu() {
-        let capitalization = UIAction(title: "Auto-Capitalization", state: autoCapitalize ? .on : .off) { [weak self] _ in
-            guard let self else { return }
-            autoCapitalize.toggle()
-            caseChoice = nil
-            UserDefaults.standard.set(autoCapitalize, forKey: "autoCapitalize")
-            manualShiftContext = nil
-            updateEnglishShift()
-            updateSuggestions()
-            configureSettingsMenu()
+        let capitalization = UIAction(title: "Auto-Capitalization") { [weak self] _ in
+            self?.showCapitalizationPanel()
         }
         let suggestions = UIAction(title: "Word Suggestions", state: wordSuggestions ? .on : .off) { [weak self] _ in
             guard let self else { return }
@@ -293,39 +287,51 @@ final class KeyboardViewController: UIInputViewController {
         let settings = UIMenu(title: "Keyboard Settings", options: .displayInline,
                               children: [capitalization, suggestions, learned])
         let tips = UIAction(title: language == .burmese ? "Burmese Typing" : "English Typing") { [weak self] _ in
-            self?.showTypingTips()
+            guard let self else { return }
+            showKeyboardPanel(KeyboardTipsView(language: language))
         }
         menuButton.menu = UIMenu(children: [settings,
                                           UIMenu(title: "Typing Tips", options: .displayInline, children: [tips])])
     }
 
-    private func showTypingTips() {
-        guard typingTips == nil else { return }
+    private func showCapitalizationPanel() {
+        let panel = KeyboardCapitalizationView(selected: capitalizationStyle) { [weak self] style in
+            guard let self else { return }
+            capitalizationStyle = style
+            UserDefaults.standard.set(style.rawValue, forKey: CapitalizationStyle.preferenceKey)
+            caseChoice = nil
+            manualShiftContext = nil
+            updateEnglishShift()
+        }
+        showKeyboardPanel(panel)
+    }
+
+    private func showKeyboardPanel(_ panel: KeyboardPanelView) {
+        guard keyboardPanel == nil else { return }
         closeEmoji()
         cancelGestures()
         doubleSpace = DoubleSpaceShortcut()
-        let tips = KeyboardTipsView(language: language)
-        tips.onClose = { [weak self] in self?.closeTypingTips(resumingTyping: true) }
-        tips.onHide = { [weak self] in self?.dismissKeyboard() }
-        tips.translatesAutoresizingMaskIntoConstraints = false
-        board.addSubview(tips)
+        panel.onClose = { [weak self] in self?.closeKeyboardPanel(resumingTyping: true) }
+        panel.onHide = { [weak self] in self?.dismissKeyboard() }
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        board.addSubview(panel)
         NSLayoutConstraint.activate([
-            tips.topAnchor.constraint(equalTo: board.topAnchor, constant: contentTopInset),
-            tips.leadingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.leadingAnchor, constant: 8),
-            tips.trailingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.trailingAnchor, constant: -8),
-            tips.bottomAnchor.constraint(equalTo: board.safeAreaLayoutGuide.bottomAnchor, constant: -4)
+            panel.topAnchor.constraint(equalTo: board.topAnchor, constant: contentTopInset),
+            panel.leadingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.leadingAnchor, constant: 8),
+            panel.trailingAnchor.constraint(equalTo: board.safeAreaLayoutGuide.trailingAnchor, constant: -8),
+            panel.bottomAnchor.constraint(equalTo: board.safeAreaLayoutGuide.bottomAnchor, constant: -4)
         ])
-        typingTips = tips
+        keyboardPanel = panel
         updateKeyboardHeight()
         keyArea.isHidden = true
         clearSuggestions()
-        UIAccessibility.post(notification: .screenChanged, argument: tips.backButton)
+        UIAccessibility.post(notification: .screenChanged, argument: panel.backButton)
     }
 
-    private func closeTypingTips(resumingTyping: Bool) {
-        guard let tips = typingTips else { return }
-        tips.removeFromSuperview()
-        typingTips = nil
+    private func closeKeyboardPanel(resumingTyping: Bool) {
+        guard let panel = keyboardPanel else { return }
+        panel.removeFromSuperview()
+        keyboardPanel = nil
         updateKeyboardHeight()
         keyArea.isHidden = false
         guard resumingTyping else { return }
@@ -341,7 +347,7 @@ final class KeyboardViewController: UIInputViewController {
         if manualShiftContext == context { return shift }
         manualShiftContext = nil
         if caseChoice?.action(at: context) == .retryLowercase { return false }
-        guard autoCapitalize, !isSearchingEmoji else { return false }
+        guard !isSearchingEmoji else { return false }
         let proxy = textDocumentProxy
         switch proxy.keyboardType {
         case .emailAddress, .URL, .numberPad, .decimalPad, .phonePad: return false
@@ -355,7 +361,7 @@ final class KeyboardViewController: UIInputViewController {
         default: mode = .sentences
         }
         let boundary = deferredSpace.applies(at: context) ? " " : ""
-        return mode.shouldShift(before: (context.before ?? "") + boundary, after: context.after ?? "")
+        return mode.shouldShift(before: (context.before ?? "") + boundary, after: context.after ?? "", style: capitalizationStyle)
     }
 
     private func updateEnglishShift() {
@@ -599,7 +605,9 @@ final class KeyboardViewController: UIInputViewController {
             self.rebuild()
         }
         symbols.accessibilityLabel = symbolPage == nil ? "Show symbols" : "Show letters"
-        let languages = command(language == .burmese ? "abc" : "ကခ") { [weak self] in self?.switchLanguage() }
+        let destination = language == .burmese ? "abc" : "ကခ"
+        let languages = command(destination) { [weak self] in self?.switchLanguage() }
+        languages.fill = KeyColors.languageSwitch
         languages.accessibilityLabel = language == .burmese ? "Switch to English" : "Switch to Burmese"
         bottom.addArrangedSubview(languages)
         bottom.addArrangedSubview(symbols)
@@ -843,7 +851,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func capitalizePronoun(before input: String, at context: HostContext) -> (context: HostContext, original: String?) {
-        guard autoCapitalize, context.before?.last == "i", allowsAutomaticWordSpacing,
+        guard capitalizationStyle != .off, context.before?.last == "i", allowsAutomaticWordSpacing,
               caseChoice?.action(at: context) != .keepSpelling,
               textDocumentProxy.autocapitalizationType != .some(.none),
               let pronoun = EnglishToken.standalonePronoun(at: context, before: input) else { return (context, nil) }
@@ -883,7 +891,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func insertAndObserve(_ value: String, at before: HostContext, originalSpelling: String? = nil) {
         let choice = caseChoice?.action(at: before)
-        let automatic = language == .english && autoCapitalize && shift && manualShiftContext == nil && capsLockDocument == nil
+        let automatic = language == .english && capitalizationStyle != .off && shift && manualShiftContext == nil && capsLockDocument == nil
         let manualLower = language == .english && !shift && (manualShiftContext == before || choice == .retryLowercase)
         var next: EnglishCaseChoice.Action?
         if let originalSpelling, value.count == 1 { next = .undoCapitalization(original: originalSpelling) }
@@ -1044,11 +1052,11 @@ final class KeyboardViewController: UIInputViewController {
             clearSuggestions()
             return
         }
-        guard wordSuggestions, emojiPicker == nil, typingTips == nil, cursorDrag == nil else { clearSuggestions(); return }
+        guard wordSuggestions, emojiPicker == nil, keyboardPanel == nil, cursorDrag == nil else { clearSuggestions(); return }
         let context = suggestionContext
         let mode = language
         let allCaps = (capsLockDocument != nil && capsLockDocument == context.document)
-            || (autoCapitalize && textDocumentProxy.autocapitalizationType == .allCharacters)
+            || (capitalizationStyle != .off && textDocumentProxy.autocapitalizationType == .allCharacters)
         guard context.document != nil,
               mode != .english || (allowsEnglishWordEdits && !deferredSpace.applies(at: context))
         else { clearSuggestions(); return }

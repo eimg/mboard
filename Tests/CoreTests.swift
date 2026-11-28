@@ -186,6 +186,46 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(EnglishCapitalization.none.shouldShift(before: "က "))
     }
 
+    func testChosenCapitalizationStyleInProse() {
+        let mode = EnglishCapitalization.sentences
+        for style in [CapitalizationStyle.sentenceStarts, .firstEnglishWord, .everyEnglishWord] {
+            for prefix in ["", "Done. ", "က။", "က။ ", "က\n"] {
+                XCTAssertTrue(mode.shouldShift(before: prefix, style: style), prefix)
+            }
+            for prefix in ["က။ See ", "က\nSee ", "Hello ", "က Team’s", "က 2.5. Next "] {
+                XCTAssertFalse(mode.shouldShift(before: prefix, style: style), prefix)
+            }
+            for prefix in ["ဒီနေ့", "ဒီနေ့ ", "ဒီနေ့၊", "ဒီနေ့၊ “", "ဒီနေ့ Team ကို ", "က 2.5 "] {
+                XCTAssertEqual(mode.shouldShift(before: prefix, style: style), style != .sentenceStarts, prefix)
+            }
+            for (prefix, suffix) in [("ဒီနေ့ Team ", ""), ("ဒီနေ့ Team, ", "က"), ("Try ", " က"),
+                                     ("က Version 2.5 ", ""), ("Version ", "2.5 က")] {
+                XCTAssertEqual(mode.shouldShift(before: prefix, after: suffix, style: style), style == .everyEnglishWord)
+            }
+            XCTAssertTrue(EnglishCapitalization.words.shouldShift(before: "First ", style: style))
+            XCTAssertTrue(EnglishCapitalization.allCharacters.shouldShift(before: "Fi", style: style))
+            XCTAssertFalse(EnglishCapitalization.none.shouldShift(before: "", style: style))
+        }
+        for mode in [EnglishCapitalization.sentences, .words, .allCharacters] {
+            XCTAssertFalse(mode.shouldShift(before: "", style: .off))
+        }
+    }
+
+    func testCapitalizationPreferencePreservesExistingChoice() {
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(CapitalizationStyle(defaults: defaults), .everyEnglishWord)
+        defaults.set(true, forKey: "autoCapitalize")
+        XCTAssertEqual(CapitalizationStyle(defaults: defaults), .everyEnglishWord)
+        defaults.set(false, forKey: "autoCapitalize")
+        XCTAssertEqual(CapitalizationStyle(defaults: defaults), .off)
+        for style in CapitalizationStyle.allCases {
+            defaults.set(style.rawValue, forKey: CapitalizationStyle.preferenceKey)
+            XCTAssertEqual(CapitalizationStyle(defaults: defaults), style)
+        }
+    }
+
     func testReferenceLayout() {
         let rows = KeyboardLayout.letters(.burmese, shift: false)
         XCTAssertEqual(rows.map(\.count), [10,10,10,8])

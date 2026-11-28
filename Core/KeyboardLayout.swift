@@ -81,19 +81,45 @@ struct DoubleSpaceShortcut {
     }
 }
 
+enum CapitalizationStyle: String, CaseIterable {
+    case off, sentenceStarts, firstEnglishWord, everyEnglishWord
+
+    static let preferenceKey = "capitalizationStyle"
+
+    init(defaults: UserDefaults) {
+        if let value = defaults.string(forKey: Self.preferenceKey), let style = Self(rawValue: value) {
+            self = style
+        } else {
+            let wasEnabled = defaults.object(forKey: "autoCapitalize") as? Bool ?? true
+            self = wasEnabled ? .everyEnglishWord : .off
+        }
+    }
+}
+
 enum EnglishCapitalization {
     case none, words, sentences, allCharacters
 
-    private static func containsBurmeseInSentence<S: Sequence>(_ scalars: S) -> Bool
+    private static func containsBurmeseInSentence<S: BidirectionalCollection>(_ scalars: S, stopAtOtherLetter: Bool = false) -> Bool
         where S.Element == Unicode.Scalar {
-        for scalar in scalars {
-            if CharacterSet.newlines.contains(scalar) || ".!?။…".unicodeScalars.contains(scalar) { break }
+        for index in scalars.indices {
+            let scalar = scalars[index]
+            if scalar == "." {
+                // A decimal point separates digits in either scan direction.
+                let next = scalars.index(after: index)
+                guard index != scalars.startIndex, next != scalars.endIndex,
+                      CharacterSet.decimalDigits.contains(scalars[scalars.index(before: index)]),
+                      CharacterSet.decimalDigits.contains(scalars[next]) else { break }
+                continue
+            }
+            if CharacterSet.newlines.contains(scalar) || "!?။…".unicodeScalars.contains(scalar) { break }
             if Language.isBurmeseWordScalar(scalar) { return true }
+            if stopAtOtherLetter && CharacterSet.letters.contains(scalar) { break }
         }
         return false
     }
 
-    func shouldShift(before text: String, after: String = "") -> Bool {
+    func shouldShift(before text: String, after: String = "", style: CapitalizationStyle = .everyEnglishWord) -> Bool {
+        guard style != .off else { return false }
         switch self {
         case .none: return false
         case .allCharacters: return true
@@ -102,9 +128,9 @@ enum EnglishCapitalization {
             let quotes = "\"'“‘([{"
             while let last = context.last, quotes.contains(last) { context.removeLast() }
             guard let last = context.last else { return true }
-            if let scalar = last.unicodeScalars.last, Language.isBurmeseWordScalar(scalar) { return true }
-            if last == "၊" || last == "။" { return true }
-            guard last.isWhitespace else { return false }
+            if last == "။" { return true }
+            let afterBurmese = context.unicodeScalars.last.map(Language.isBurmeseWordScalar) == true
+            guard last.isWhitespace || afterBurmese || last == "၊" else { return false }
             if self == .words { return true }
             while let space = context.last, space.isWhitespace {
                 if space.isNewline { return true }
@@ -113,9 +139,14 @@ enum EnglishCapitalization {
             while let closing = context.last, "\"'”’)]}".contains(closing) { context.removeLast() }
             guard let preceding = context.last else { return true }
             if ".!?။…".contains(preceding) { return true }
-            // At a word boundary, English words in a Burmese sentence start with a capital.
-            return Self.containsBurmeseInSentence(context.unicodeScalars.reversed()) ||
-                Self.containsBurmeseInSentence(after.unicodeScalars)
+            switch style {
+            case .off, .sentenceStarts: return false
+            case .firstEnglishWord:
+                return Self.containsBurmeseInSentence(context.unicodeScalars.reversed(), stopAtOtherLetter: true)
+            case .everyEnglishWord:
+                return last == "၊" || Self.containsBurmeseInSentence(context.unicodeScalars.reversed()) ||
+                    Self.containsBurmeseInSentence(after.unicodeScalars)
+            }
         }
     }
 }
